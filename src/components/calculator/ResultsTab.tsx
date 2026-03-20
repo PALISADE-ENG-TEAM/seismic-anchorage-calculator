@@ -1,0 +1,243 @@
+import type { CalculationResults, CapacityCheck } from '@/lib/types.ts';
+import { CheckCircle, XCircle, AlertTriangle } from 'lucide-react';
+
+export function ResultsTab({
+  results,
+  onCalculate,
+}: {
+  results: CalculationResults | undefined;
+  onCalculate: () => void;
+}) {
+  if (!results) {
+    return (
+      <div className="text-center py-16">
+        <AlertTriangle className="w-12 h-12 text-warn mx-auto mb-4" />
+        <h2 className="text-lg font-medium mb-2">No results yet</h2>
+        <p className="text-muted-foreground text-sm mb-6">
+          Fill in Site, Properties, and Anchorage tabs, then click Calculate.
+        </p>
+        <button
+          onClick={onCalculate}
+          className="px-6 py-3 rounded-xl bg-primary text-primary-foreground font-bold text-lg hover:bg-primary/90 transition-colors"
+        >
+          CALCULATE
+        </button>
+      </div>
+    );
+  }
+
+  const pass = results.overallStatus === 'PASS';
+
+  return (
+    <div className="space-y-6">
+      {/* PASS/FAIL Banner */}
+      <div
+        className={`flex items-center gap-3 p-4 rounded-xl border-2 ${
+          pass
+            ? 'bg-pass/10 border-pass text-pass'
+            : 'bg-fail/10 border-fail text-fail'
+        }`}
+      >
+        {pass ? (
+          <CheckCircle className="w-8 h-8 flex-shrink-0" />
+        ) : (
+          <XCircle className="w-8 h-8 flex-shrink-0" />
+        )}
+        <div>
+          <h2 className="text-2xl font-bold">{results.overallStatus}</h2>
+          <p className="text-sm opacity-80">
+            Governing: {formatCheckName(results.governingCheck)} ({(results.maxUtilizationRatio * 100).toFixed(1)}% utilization)
+          </p>
+        </div>
+        <div className="ml-auto">
+          <button
+            onClick={onCalculate}
+            className="px-4 py-2 rounded-lg bg-secondary text-secondary-foreground text-sm font-medium hover:bg-secondary/80 transition-colors"
+          >
+            Recalculate
+          </button>
+        </div>
+      </div>
+
+      {/* Seismic Force Breakdown */}
+      <Section title="Seismic Force (ASCE 7-22 Eq. 13.3-1)">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <ValueCard label="Hf" value={results.Hf.toFixed(3)} sub="Height factor" />
+          <ValueCard label="R\u03BC" value={results.Rmu.toFixed(3)} sub="Ductility factor" />
+          <ValueCard label="CAR" value={results.CAR.toFixed(2)} sub="Resonance factor" />
+          <ValueCard label="Rpo" value={results.Rpo.toFixed(2)} sub="Strength factor" />
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
+          <ValueCard label="Fp,calc" value={fmt(results.fpCalculated)} sub="Eq. 13.3-1" unit="lbs" />
+          <ValueCard label="Fp,min" value={fmt(results.fpMinimum)} sub="Eq. 13.3-2" unit="lbs" />
+          <ValueCard label="Fp,max" value={fmt(results.fpMaximum)} sub="Eq. 13.3-3" unit="lbs" />
+          <ValueCard
+            label="Fp,design"
+            value={fmt(results.fpDesign)}
+            sub="Governing"
+            unit="lbs"
+            highlight
+          />
+        </div>
+      </Section>
+
+      {/* Overturning Analysis */}
+      <Section title="Overturning Analysis">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+          <ValueCard label="M_ot" value={fmt(results.overturnMoment)} unit="lb-ft" sub="Overturning" />
+          <ValueCard label="M_r1" value={fmt(results.resistingMoment1)} unit="lb-ft" sub="Dir. 1 (along L)" />
+          <ValueCard label="M_r2" value={fmt(results.resistingMoment2)} unit="lb-ft" sub="Dir. 2 (along W)" />
+          <ValueCard label="M_net1" value={fmt(results.netUpliftMoment1)} unit="lb-ft" sub="Net Dir. 1" />
+          <ValueCard label="M_net2" value={fmt(results.netUpliftMoment2)} unit="lb-ft" sub="Net Dir. 2" />
+          <ValueCard
+            label="Governing"
+            value={results.governingDirection}
+            sub={results.upliftOccurs ? 'Uplift occurs' : 'No uplift'}
+            highlight
+          />
+        </div>
+      </Section>
+
+      {/* Anchor Demands */}
+      <Section title="Anchor Demands (with \u03A90p overstrength)">
+        <div className="grid grid-cols-2 gap-4">
+          <ValueCard
+            label="Tu per anchor"
+            value={fmt(results.tuPerAnchor)}
+            unit="lbs"
+            sub={results.upliftOccurs ? 'Tension (uplift)' : 'No uplift'}
+            highlight={results.upliftOccurs}
+          />
+          <ValueCard
+            label="Vu per anchor"
+            value={fmt(results.vuPerAnchor)}
+            unit="lbs"
+            sub="Shear"
+          />
+        </div>
+      </Section>
+
+      {/* Capacity Checks Table */}
+      <Section title="Capacity Checks (ACI 318-19 Chapter 17)">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-border text-muted-foreground text-left">
+                <th className="py-2 pr-4">Check</th>
+                <th className="py-2 pr-4 text-right font-mono">Demand</th>
+                <th className="py-2 pr-4 text-right font-mono">Capacity</th>
+                <th className="py-2 pr-4 text-right font-mono">Ratio</th>
+                <th className="py-2 pr-4 text-center">Status</th>
+                <th className="py-2 text-right">Code Ref</th>
+              </tr>
+            </thead>
+            <tbody>
+              {Object.entries(results.checks).map(([key, check]) => (
+                <CheckRow key={key} name={key} check={check} isGoverning={key === results.governingCheck} />
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Section>
+    </div>
+  );
+}
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="bg-card border border-border rounded-xl p-4">
+      <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+        {title}
+      </h3>
+      {children}
+    </div>
+  );
+}
+
+function ValueCard({
+  label,
+  value,
+  sub,
+  unit,
+  highlight,
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+  unit?: string;
+  highlight?: boolean;
+}) {
+  return (
+    <div className={`p-3 rounded-lg ${highlight ? 'bg-primary/10 border border-primary/30' : 'bg-background'}`}>
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="text-lg font-mono font-semibold">
+        {value}
+        {unit && <span className="text-xs text-muted-foreground ml-1">{unit}</span>}
+      </p>
+      {sub && <p className="text-xs text-muted-foreground">{sub}</p>}
+    </div>
+  );
+}
+
+function CheckRow({
+  name,
+  check,
+  isGoverning,
+}: {
+  name: string;
+  check: CapacityCheck;
+  isGoverning: boolean;
+}) {
+  const pass = check.status === 'PASS';
+  const isInteraction = name === 'interaction';
+
+  return (
+    <tr className={`border-b border-border/50 ${isGoverning ? 'bg-primary/5' : ''}`}>
+      <td className="py-2 pr-4">
+        <span className={isGoverning ? 'font-semibold text-primary' : ''}>
+          {formatCheckName(name)}
+        </span>
+        {isGoverning && (
+          <span className="ml-2 text-xs text-primary font-medium">GOVERNING</span>
+        )}
+      </td>
+      <td className="py-2 pr-4 text-right font-mono">
+        {isInteraction ? check.demand.toFixed(3) : fmt(check.demand)}
+        {!isInteraction && <span className="text-xs text-muted-foreground ml-1">lbs</span>}
+      </td>
+      <td className="py-2 pr-4 text-right font-mono">
+        {isInteraction ? '1.000' : fmt(check.capacity)}
+        {!isInteraction && <span className="text-xs text-muted-foreground ml-1">lbs</span>}
+      </td>
+      <td className="py-2 pr-4 text-right font-mono font-medium">
+        {(check.ratio * 100).toFixed(1)}%
+      </td>
+      <td className="py-2 pr-4 text-center">
+        <span
+          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold ${
+            pass ? 'bg-pass/20 text-pass' : 'bg-fail/20 text-fail'
+          }`}
+        >
+          {check.status}
+        </span>
+      </td>
+      <td className="py-2 text-right text-xs text-muted-foreground">{check.codeRef}</td>
+    </tr>
+  );
+}
+
+function formatCheckName(key: string): string {
+  const names: Record<string, string> = {
+    steelTension: 'Steel Tension',
+    steelShear: 'Steel Shear',
+    concreteBreakoutTension: 'Concrete Breakout (Tension)',
+    concreteBreakoutShear: 'Concrete Breakout (Shear)',
+    concretePryout: 'Concrete Pryout',
+    interaction: 'Tension-Shear Interaction',
+  };
+  return names[key] || key;
+}
+
+function fmt(n: number): string {
+  return n.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+}
