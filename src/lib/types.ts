@@ -121,9 +121,18 @@ export interface CalculationResults {
   governingDirection: 'longitudinal' | 'transverse';
   upliftOccurs: boolean;
 
-  // Anchor Demands (with Ω0p overstrength)
-  tuPerAnchor: number;      // Tension demand per anchor (lbs), 0 if no uplift
-  vuPerAnchor: number;      // Shear demand per anchor (lbs)
+  // Individual Load Case Reactions (before load combinations)
+  loadCases: {
+    dead: { verticalReaction: number; description: string };       // 0.9D stabilizing
+    seismicFp: { horizontalForce: number; description: string };   // Fp design force
+    seismicOverturn: { moment: number; description: string };      // M_ot = Fp × hcg
+    seismicTensionPerAnchor: number;     // Tu per anchor WITHOUT Ω0p
+    seismicShearPerAnchor: number;       // Vu per anchor WITHOUT Ω0p
+  };
+
+  // Anchor Demands (with Ω0p overstrength — for capacity checks)
+  tuPerAnchor: number;      // Tension demand per anchor (lbs), 0 if no uplift, includes Ω0p
+  vuPerAnchor: number;      // Shear demand per anchor (lbs), includes Ω0p
 
   // Capacity Checks (ACI 318-19 Chapter 17)
   checks: {

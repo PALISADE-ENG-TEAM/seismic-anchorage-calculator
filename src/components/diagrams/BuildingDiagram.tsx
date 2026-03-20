@@ -2,11 +2,11 @@
 // Used in SiteTab to visualize z/h ratio for ASCE 7-22 Hf factor
 
 const COLORS = {
-  bg: '#1e293b',
-  border: '#475569',
-  accent: '#f97316',
-  text: '#e2e8f0',
-  muted: '#94a3b8',
+  bg: '#e2e8f0',
+  border: '#94a3b8',
+  accent: '#2563eb',
+  text: '#1e293b',
+  muted: '#64748b',
 };
 
 interface BuildingDiagramProps {

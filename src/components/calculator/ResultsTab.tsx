@@ -63,7 +63,7 @@ export function ResultsTab({
       <Section title="Seismic Force (ASCE 7-22 Eq. 13.3-1)">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <ValueCard label="Hf" value={results.Hf.toFixed(3)} sub="Height factor" />
-          <ValueCard label="R\u03BC" value={results.Rmu.toFixed(3)} sub="Ductility factor" />
+          <ValueCard label={"R\u03BC"} value={results.Rmu.toFixed(3)} sub="Ductility factor" />
           <ValueCard label="CAR" value={results.CAR.toFixed(2)} sub="Resonance factor" />
           <ValueCard label="Rpo" value={results.Rpo.toFixed(2)} sub="Strength factor" />
         </div>
@@ -98,21 +98,57 @@ export function ResultsTab({
         </div>
       </Section>
 
-      {/* Anchor Demands */}
-      <Section title={`Anchor Demands (with \u03A9\u2080p overstrength)`}>
+      {/* Individual Load Case Reactions */}
+      <Section title="Load Case Reactions (before combinations)">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+          <ValueCard
+            label="Dead Load (D)"
+            value={fmt(results.loadCases.dead.verticalReaction)}
+            unit="lbs/anchor"
+            sub="Stabilizing (downward)"
+          />
+          <ValueCard
+            label="Seismic Force (Eh)"
+            value={fmt(results.loadCases.seismicFp.horizontalForce)}
+            unit="lbs"
+            sub="Horizontal, at CG"
+          />
+          <ValueCard
+            label="Overturning (M_ot)"
+            value={fmt(results.loadCases.seismicOverturn.moment)}
+            unit="lb-ft"
+            sub="Fp × hcg"
+          />
+          <ValueCard
+            label="Tu per anchor (E only)"
+            value={fmt(results.loadCases.seismicTensionPerAnchor)}
+            unit="lbs"
+            sub={`Before \u03A9\u2080p = ${results.Rpo > 0 ? (results.tuPerAnchor / Math.max(results.loadCases.seismicTensionPerAnchor, 0.001)).toFixed(2) : '—'}`}
+          />
+          <ValueCard
+            label="Vu per anchor (E only)"
+            value={fmt(results.loadCases.seismicShearPerAnchor)}
+            unit="lbs"
+            sub={`Before \u03A9\u2080p`}
+          />
+        </div>
+      </Section>
+
+      {/* Anchor Demands (with overstrength) */}
+      <Section title={`Design Anchor Demands (with \u03A9\u2080p = ${results.upliftOccurs ? (results.tuPerAnchor / Math.max(results.loadCases.seismicTensionPerAnchor, 0.001)).toFixed(2) : '—'} overstrength)`}>
         <div className="grid grid-cols-2 gap-4">
           <ValueCard
             label="Tu per anchor"
             value={fmt(results.tuPerAnchor)}
             unit="lbs"
-            sub={results.upliftOccurs ? 'Tension (uplift)' : 'No uplift'}
+            sub={results.upliftOccurs ? 'Tension (uplift) — for capacity checks' : 'No uplift'}
             highlight={results.upliftOccurs}
           />
           <ValueCard
             label="Vu per anchor"
             value={fmt(results.vuPerAnchor)}
             unit="lbs"
-            sub="Shear"
+            sub="Shear — for capacity checks"
           />
         </div>
       </Section>

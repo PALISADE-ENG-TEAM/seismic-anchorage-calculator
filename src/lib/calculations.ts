@@ -557,6 +557,11 @@ export function runCalculation(
     }
   }
 
+  // --- Load Case Reactions (before combinations/overstrength) ---
+  const nTotal = anchor.anchorLayout.nLong * anchor.anchorLayout.nTrans;
+  const tuWithoutOmega = equip.Omega0p > 0 ? demands.tuPerAnchor / equip.Omega0p : 0;
+  const vuWithoutOmega = equip.Omega0p > 0 ? demands.vuPerAnchor / equip.Omega0p : 0;
+
   return {
     Hf,
     Rmu,
@@ -573,6 +578,22 @@ export function runCalculation(
     netUpliftMoment2: overturning.netUpliftMoment2,
     governingDirection: overturning.governingDirection,
     upliftOccurs: overturning.upliftOccurs,
+    loadCases: {
+      dead: {
+        verticalReaction: equip.weight / nTotal,
+        description: `D = Wp / ${nTotal} anchors = ${(equip.weight / nTotal).toFixed(0)} lbs/anchor (stabilizing)`,
+      },
+      seismicFp: {
+        horizontalForce: fp.fpDesign,
+        description: `Eh = Fp = ${fp.fpDesign.toFixed(0)} lbs (ASCE 7-22 Eq. 13.3-1)`,
+      },
+      seismicOverturn: {
+        moment: overturning.overturnMoment,
+        description: `M_ot = Fp × h_cg = ${overturning.overturnMoment.toFixed(0)} lb-ft`,
+      },
+      seismicTensionPerAnchor: tuWithoutOmega,
+      seismicShearPerAnchor: vuWithoutOmega,
+    },
     tuPerAnchor: demands.tuPerAnchor,
     vuPerAnchor: demands.vuPerAnchor,
     checks,

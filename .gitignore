@@ -22,3 +22,8 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+*.pdf
+src/assets/hero.png
+
+.vercel
+screenshot-*.png

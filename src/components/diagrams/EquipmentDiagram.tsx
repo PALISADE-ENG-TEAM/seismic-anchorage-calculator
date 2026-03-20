@@ -2,13 +2,13 @@
 // Used in PropertiesTab to visualize equipment dimensions and force application
 
 const COLORS = {
-  bg: '#1e293b',
-  border: '#475569',
-  accent: '#f97316',
-  text: '#e2e8f0',
-  muted: '#94a3b8',
-  green: '#22c55e',
-  red: '#ef4444',
+  bg: '#e2e8f0',
+  border: '#94a3b8',
+  accent: '#2563eb',
+  text: '#1e293b',
+  muted: '#64748b',
+  green: '#16a34a',
+  red: '#dc2626',
 };
 
 // Isometric projection helpers (30-degree isometric)
@@ -126,7 +126,7 @@ export function EquipmentDiagram({ length, width, height, cgHeight }: EquipmentD
       {/* Right face */}
       <polygon
         points={`${b1[0]},${b1[1]} ${b2[0]},${b2[1]} ${t2[0]},${t2[1]} ${t1[0]},${t1[1]}`}
-        fill="rgba(71, 85, 105, 0.12)"
+        fill="rgba(255, 255, 255, 0.6)"
         stroke={COLORS.border}
         strokeWidth="1.5"
       />
@@ -134,7 +134,7 @@ export function EquipmentDiagram({ length, width, height, cgHeight }: EquipmentD
       {/* Left face */}
       <polygon
         points={`${b2[0]},${b2[1]} ${b3[0]},${b3[1]} ${t3[0]},${t3[1]} ${t2[0]},${t2[1]}`}
-        fill="rgba(71, 85, 105, 0.08)"
+        fill="rgba(148, 163, 184, 0.25)"
         stroke={COLORS.border}
         strokeWidth="1.5"
       />
@@ -142,7 +142,7 @@ export function EquipmentDiagram({ length, width, height, cgHeight }: EquipmentD
       {/* Top face */}
       <polygon
         points={`${t0[0]},${t0[1]} ${t1[0]},${t1[1]} ${t2[0]},${t2[1]} ${t3[0]},${t3[1]}`}
-        fill="rgba(71, 85, 105, 0.18)"
+        fill="rgba(148, 163, 184, 0.35)"
         stroke={COLORS.border}
         strokeWidth="1.5"
       />
@@ -150,7 +150,7 @@ export function EquipmentDiagram({ length, width, height, cgHeight }: EquipmentD
       {/* Front face */}
       <polygon
         points={`${b0[0]},${b0[1]} ${b1[0]},${b1[1]} ${t1[0]},${t1[1]} ${t0[0]},${t0[1]}`}
-        fill="rgba(71, 85, 105, 0.05)"
+        fill="rgba(255, 255, 255, 0.85)"
         stroke={COLORS.border}
         strokeWidth="1.5"
       />
