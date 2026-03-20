@@ -1,12 +1,17 @@
-import type { CalculationResults, CapacityCheck } from '@/lib/types.ts';
+import type { CalculationResults, CapacityCheck, SiteParams, EquipmentProperties } from '@/lib/types.ts';
 import { CheckCircle, XCircle, AlertTriangle } from 'lucide-react';
+import { EquationBlock } from '@/components/report/EquationBlock.tsx';
 
 export function ResultsTab({
   results,
   onCalculate,
+  siteParams,
+  equipProps,
 }: {
   results: CalculationResults | undefined;
   onCalculate: () => void;
+  siteParams?: SiteParams;
+  equipProps?: EquipmentProperties;
 }) {
   if (!results) {
     return (
@@ -175,6 +180,13 @@ export function ResultsTab({
           </table>
         </div>
       </Section>
+
+      {/* Equation Derivations */}
+      {siteParams && equipProps && (
+        <Section title="Equation Derivations (ASCE 7-22 + ACI 318-19)">
+          <EquationBlock results={results} siteParams={siteParams} equipProps={equipProps} />
+        </Section>
+      )}
     </div>
   );
 }

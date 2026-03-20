@@ -1,9 +1,11 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import type { SiteParams, RiskCategory, SiteClass } from '@/lib/types.ts';
 import { SFRS_TYPES, IMPORTANCE_FACTORS } from '@/lib/constants.ts';
 import { fetchSeismicData, geocodeAddress, determineSDC } from '@/lib/usgs-api.ts';
 import { BuildingDiagram } from '@/components/diagrams/BuildingDiagram.tsx';
-import { MapPin, Search, AlertTriangle } from 'lucide-react';
+import { AddressAutocomplete } from '@/components/calculator/AddressAutocomplete.tsx';
+import type { AddressSuggestion } from '@/components/calculator/AddressAutocomplete.tsx';
+import { Search, AlertTriangle } from 'lucide-react';
 
 const SITE_CLASSES: SiteClass[] = ['A', 'B', 'BC', 'C', 'CD', 'D', 'DE', 'E', 'F'];
 const RISK_CATEGORIES: RiskCategory[] = ['I', 'II', 'III', 'IV'];
@@ -18,38 +20,66 @@ export function SiteTab({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const handleLookup = async () => {
-    if (!params.address.trim()) {
-      setError('Enter an address first');
-      return;
-    }
-    setLoading(true);
-    setError('');
-    try {
-      const geo = await geocodeAddress(params.address);
-      const seismic = await fetchSeismicData(
-        geo.latitude,
-        geo.longitude,
-        params.riskCategory,
-        params.siteClass
-      );
-      const sdc = determineSDC(seismic.SDS, seismic.SD1, params.riskCategory);
-      onChange({
-        latitude: geo.latitude,
-        longitude: geo.longitude,
-        address: geo.formattedAddress || params.address,
-        SDS: seismic.SDS,
-        SD1: seismic.SD1,
-        Ss: seismic.Ss,
-        S1: seismic.S1,
-        seismicDesignCategory: sdc,
-      });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Lookup failed');
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Shared USGS lookup logic — accepts explicit lat/lon or geocodes from address
+  const runUSGSLookup = useCallback(
+    async (lat?: number, lon?: number, addressText?: string) => {
+      setLoading(true);
+      setError('');
+      try {
+        let latitude = lat;
+        let longitude = lon;
+        let resolvedAddress = addressText ?? params.address;
+
+        // If no lat/lon provided, geocode the address first
+        if (latitude === undefined || longitude === undefined) {
+          if (!params.address.trim()) {
+            setError('Enter an address first');
+            setLoading(false);
+            return;
+          }
+          const geo = await geocodeAddress(params.address);
+          latitude = geo.latitude;
+          longitude = geo.longitude;
+          resolvedAddress = geo.formattedAddress || params.address;
+        }
+
+        const seismic = await fetchSeismicData(
+          latitude,
+          longitude,
+          params.riskCategory,
+          params.siteClass
+        );
+        const sdc = determineSDC(seismic.SDS, seismic.SD1, params.riskCategory);
+        onChange({
+          latitude,
+          longitude,
+          address: resolvedAddress,
+          SDS: seismic.SDS,
+          SD1: seismic.SD1,
+          Ss: seismic.Ss,
+          S1: seismic.S1,
+          seismicDesignCategory: sdc,
+        });
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Lookup failed');
+      } finally {
+        setLoading(false);
+      }
+    },
+    [params.address, params.riskCategory, params.siteClass, onChange]
+  );
+
+  const handleLookup = () => runUSGSLookup();
+
+  const handleAutocompleteSelect = useCallback(
+    (result: AddressSuggestion) => {
+      const parts = [result.street, result.city, result.state, result.zipCode].filter(Boolean);
+      const addressText = parts.length > 0 ? parts.join(', ') : result.displayName;
+      // Auto-trigger USGS lookup with the lat/lon from the selected suggestion
+      runUSGSLookup(result.latitude, result.longitude, addressText);
+    },
+    [runUSGSLookup]
+  );
 
   const handleSFRSChange = (sfrsName: string) => {
     const sfrs = SFRS_TYPES.find((s) => s.name === sfrsName);
@@ -79,16 +109,11 @@ export function SiteTab({
             Location
           </legend>
           <div className="flex gap-2">
-            <div className="relative flex-1">
-              <MapPin className="absolute left-3 top-2.5 w-4 h-4 text-muted-foreground" />
-              <input
-                placeholder="Enter address (e.g., 123 Main St, Los Angeles, CA)"
-                value={params.address}
-                onChange={(e) => onChange({ address: e.target.value })}
-                onKeyDown={(e) => e.key === 'Enter' && handleLookup()}
-                className="w-full pl-9 pr-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-              />
-            </div>
+            <AddressAutocomplete
+              value={params.address}
+              onChange={(address) => onChange({ address })}
+              onSelect={handleAutocompleteSelect}
+            />
             <button
               onClick={handleLookup}
               disabled={loading}

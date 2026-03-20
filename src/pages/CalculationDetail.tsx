@@ -92,7 +92,12 @@ export function CalculationDetail() {
         />
       )}
       {activeTab === 'results' && (
-        <ResultsTab results={calc.results} onCalculate={handleCalculate} />
+        <ResultsTab
+          results={calc.results}
+          onCalculate={handleCalculate}
+          siteParams={calc.siteParams}
+          equipProps={calc.equipmentProperties}
+        />
       )}
       {activeTab === 'report' && <ReportTab calc={calc} />}
     </Shell>
