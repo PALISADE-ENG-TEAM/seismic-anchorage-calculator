@@ -1,17 +1,21 @@
-import type { CalculationResults, CapacityCheck, SiteParams, EquipmentProperties } from '@/lib/types.ts';
+import type { CalculationResults, CapacityCheck, SiteParams, EquipmentProperties, AnchorageConfig } from '@/lib/types.ts';
 import { CheckCircle, XCircle, AlertTriangle } from 'lucide-react';
 import { EquationBlock } from '@/components/report/EquationBlock.tsx';
+import { EquipmentFBD } from '@/components/diagrams/EquipmentFBD.tsx';
+import { AnchorDetailDiagram } from '@/components/diagrams/AnchorDetailDiagram.tsx';
 
 export function ResultsTab({
   results,
   onCalculate,
   siteParams,
   equipProps,
+  anchorConfig,
 }: {
   results: CalculationResults | undefined;
   onCalculate: () => void;
   siteParams?: SiteParams;
   equipProps?: EquipmentProperties;
+  anchorConfig?: AnchorageConfig;
 }) {
   if (!results) {
     return (
@@ -102,6 +106,42 @@ export function ResultsTab({
           />
         </div>
       </Section>
+
+      {/* Free Body Diagram + Anchor Detail */}
+      {equipProps && anchorConfig && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <Section title="Equipment Free Body Diagram">
+            <EquipmentFBD
+              length={equipProps.length}
+              width={equipProps.width}
+              height={equipProps.height}
+              cgHeight={equipProps.cgHeight}
+              Fp={results.fpDesign}
+              Wp={equipProps.weight}
+              Tu={results.tuPerAnchor}
+              Vu={results.vuPerAnchor}
+              governingDirection={results.governingDirection}
+              upliftOccurs={results.upliftOccurs}
+            />
+          </Section>
+          <Section title="Anchor Layout Detail">
+            <AnchorDetailDiagram
+              nLong={anchorConfig.anchorLayout.nLong}
+              nTrans={anchorConfig.anchorLayout.nTrans}
+              sx={anchorConfig.anchorLayout.spacing.longitudinal}
+              sy={anchorConfig.anchorLayout.spacing.transverse}
+              ca1={anchorConfig.anchorLayout.edgeDistance.ca1}
+              equipLength={equipProps.length}
+              equipWidth={equipProps.width}
+              anchorDiameter={anchorConfig.anchorDiameter}
+              Tu={results.tuPerAnchor}
+              Vu={results.vuPerAnchor}
+              governingDirection={results.governingDirection}
+              upliftOccurs={results.upliftOccurs}
+            />
+          </Section>
+        </div>
+      )}
 
       {/* Individual Load Case Reactions */}
       <Section title="Load Case Reactions (before combinations)">

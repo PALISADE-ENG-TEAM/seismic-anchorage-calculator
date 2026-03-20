@@ -97,6 +97,7 @@ export function CalculationDetail() {
           onCalculate={handleCalculate}
           siteParams={calc.siteParams}
           equipProps={calc.equipmentProperties}
+          anchorConfig={calc.anchorageConfig}
         />
       )}
       {activeTab === 'report' && <ReportTab calc={calc} />}

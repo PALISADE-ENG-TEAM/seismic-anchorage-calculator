@@ -1,5 +1,7 @@
 import type { Calculation, CapacityCheck } from '@/lib/types.ts';
 import { Printer } from 'lucide-react';
+import { EquationBlock } from '@/components/report/EquationBlock.tsx';
+import { EquipmentFBD } from '@/components/diagrams/EquipmentFBD.tsx';
 
 function fmt(n: number, decimals = 1): string {
   return n.toLocaleString('en-US', {
@@ -275,10 +277,39 @@ export function ReportTab({ calc }: { calc: Calculation }) {
           </div>
         </section>
 
-        {/* Section 7: Summary */}
+        {/* Section 7: Equipment Free Body Diagram */}
         <section className="mb-8">
           <h2 className="text-lg font-bold border-b border-border print:border-gray-400 pb-1 mb-3">
-            7. Summary
+            7. Equipment Free Body Diagram
+          </h2>
+          <div className="max-w-lg mx-auto">
+            <EquipmentFBD
+              length={eq.length}
+              width={eq.width}
+              height={eq.height}
+              cgHeight={eq.cgHeight}
+              Fp={r.fpDesign}
+              Wp={eq.weight}
+              Tu={r.tuPerAnchor}
+              Vu={r.vuPerAnchor}
+              governingDirection={r.governingDirection}
+              upliftOccurs={r.upliftOccurs}
+            />
+          </div>
+        </section>
+
+        {/* Section 8: Equation Derivations */}
+        <section className="mb-8">
+          <h2 className="text-lg font-bold border-b border-border print:border-gray-400 pb-1 mb-3">
+            8. Equation Derivations
+          </h2>
+          <EquationBlock results={r} siteParams={sp} equipProps={eq} />
+        </section>
+
+        {/* Section 9: Summary */}
+        <section className="mb-8">
+          <h2 className="text-lg font-bold border-b border-border print:border-gray-400 pb-1 mb-3">
+            9. Summary
           </h2>
           <div className="flex flex-col items-center py-6">
             <div
