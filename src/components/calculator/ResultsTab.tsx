@@ -99,7 +99,7 @@ export function ResultsTab({
       </Section>
 
       {/* Anchor Demands */}
-      <Section title="Anchor Demands (with \u03A90p overstrength)">
+      <Section title={`Anchor Demands (with \u03A9\u2080p overstrength)`}>
         <div className="grid grid-cols-2 gap-4">
           <ValueCard
             label="Tu per anchor"

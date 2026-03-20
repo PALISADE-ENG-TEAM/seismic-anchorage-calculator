@@ -47,8 +47,24 @@ src/lib/storage.ts          — localStorage wrapper
 - `npm run build` — TypeScript check + Vite production build
 - `npm test` — Run Vitest (35 tests)
 
-## Verification
-- Always run `npm test` before declaring done
-- Always run `npm run build` to check for TypeScript errors
+## Verification Protocol — MANDATORY
+
+### Before declaring any work "done" — DO NOT ASK, JUST DO:
+
+1. **Run tests**: `npm test` — all tests must pass. Run automatically. Never ask the user.
+2. **Run build**: `npm run build` — must compile clean. Run automatically. Never ask the user.
+3. **Visual verification with browser** (Playwright):
+   - Start dev server (`npm run dev`)
+   - Navigate to affected pages
+   - Take screenshots — verify text readable, inputs functional, diagrams render
+   - Test full workflow: create project → create calc → fill tabs → calculate → check results
+4. **Always commit and push** when done — don't leave changes uncommitted.
+
+### Cross-reference checks:
 - Cross-reference calculations against FEMA P-2192 examples
 - Cross-reference anchor capacity with Simpson Strong-Tie Anchor Designer
+
+### Common Mistakes — DON'T REPEAT
+1. Don't declare done without visual verification — build passing ≠ working
+2. Don't ask the user if you should run tests — JUST RUN THEM
+3. Always commit and push when done — user expects work persisted to remote

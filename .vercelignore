@@ -1,0 +1,5 @@
+*.pdf
+node_modules
+temp-scaffold
+*.md
+!README.md
