@@ -7,9 +7,9 @@ Professional seismic anchorage calculation tool for structural/MEP engineers in 
 
 ## Tech Stack
 - React 19 + TypeScript + Vite
-- Tailwind CSS v4 (dark theme: navy/slate with orange accents)
-- Wouter (routing), localStorage (persistence)
-- No backend — static SPA
+- Tailwind CSS v4 (PESE light theme: white cards, navy #1e3a5f, blue #2563eb accent)
+- Wouter (routing), localStorage (persistence), KaTeX (equations)
+- No backend — static SPA, deployed on Vercel
 
 ## Code Standards
 - **ASCE 7-22** (not 7-16) for seismic force equations
@@ -31,15 +31,44 @@ Professional seismic anchorage calculation tool for structural/MEP engineers in 
 4. **CAR has two columns** — "at/below grade" vs "above grade" based on z
 5. **All dimensions in inches, moments in lb-ft** — Convert explicitly
 
-## File Structure
+## File Structure (38 source files)
 ```
-src/lib/calculations.ts    — CORE: All ASCE 7-22 + ACI 318-19 formulas
-src/lib/calculations.test.ts — 35 verification tests
-src/lib/constants.ts        — Tables 13.5-1, 13.6-1, anchor properties, SFRS
-src/lib/equipment-db.ts     — 38 equipment models (22 Trane RTUs + others)
-src/lib/types.ts            — TypeScript interfaces
-src/lib/usgs-api.ts         — USGS seismic data + geocoding
-src/lib/storage.ts          — localStorage wrapper
+src/lib/
+  calculations.ts          — CORE: All ASCE 7-22 + ACI 318-19 formulas
+  calculations.test.ts     — 35 verification tests
+  constants.ts             — Tables 13.5-1, 13.6-1, anchor properties, SFRS
+  equipment-db.ts          — 38 equipment models (22 Trane RTUs + others)
+  types.ts                 — TypeScript interfaces
+  usgs-api.ts              — USGS seismic data + geocoding
+  storage.ts               — localStorage wrapper
+  svg/                     — Drawing primitives library (ported from PESE structural calc)
+    DimensionLine.tsx, LoadArrow.tsx, SupportSymbol.tsx, SharedMarkerDefs.tsx
+    hatching-patterns.tsx, format-helpers.ts, types.ts, index.ts
+
+src/components/
+  calculator/              — Tab components (SiteTab, PropertiesTab, AnchorageTab, ResultsTab, ReportTab)
+    AddressAutocomplete.tsx — Debounced Nominatim address search
+    EquipmentSearchDialog.tsx — 38-model equipment database search
+  diagrams/                — SVG engineering diagrams
+    BuildingDiagram.tsx, EquipmentDiagram.tsx, AnchorDiagram.tsx
+    EquipmentFBD.tsx        — Free body diagram with color-coded forces
+    AnchorDetailDiagram.tsx — Enhanced anchor plan view
+  report/                  — KaTeX equation components
+    ReportEquation.tsx      — "Show your work" Breyer-style renderer
+    EquationBlock.tsx       — All 7 ASCE 7-22 + ACI 318-19 derivations
+
+src/pages/                 — Dashboard, ProjectView, CalculationDetail (5-tab)
+src/hooks/                 — useProjects, useCalculation, useCalculationDetail
+```
+
+## Quick Start (new machine)
+```bash
+git clone https://github.com/palisadeengineering/seismic-anchorage-calculator.git
+cd seismic-anchorage-calculator
+npm install
+npm test          # 35 tests should pass
+npm run build     # Should compile clean
+npm run dev       # localhost:5173
 ```
 
 ## Commands
