@@ -213,8 +213,10 @@ export function ResultsTab({
               </tr>
             </thead>
             <tbody>
-              {Object.entries(results.checks).map(([key, check]) => (
-                <CheckRow key={key} name={key} check={check} isGoverning={key === results.governingCheck} />
+              {Object.entries(results.checks)
+                .filter(([, check]) => check !== null)
+                .map(([key, check]) => (
+                <CheckRow key={key} name={key} check={check!} isGoverning={key === results.governingCheck} />
               ))}
             </tbody>
           </table>

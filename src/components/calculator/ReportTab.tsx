@@ -265,11 +265,13 @@ export function ReportTab({ calc }: { calc: Calculation }) {
                 </tr>
               </thead>
               <tbody>
-                {Object.entries(r.checks).map(([key, check]) => (
+                {Object.entries(r.checks)
+                  .filter(([, check]) => check !== null)
+                  .map(([key, check]) => (
                   <CheckRow
                     key={key}
                     label={CHECK_LABELS[key] ?? key}
-                    check={check}
+                    check={check!}
                   />
                 ))}
               </tbody>

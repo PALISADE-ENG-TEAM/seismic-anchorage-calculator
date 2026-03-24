@@ -77,6 +77,28 @@ export interface AnchorageConfig {
   embedmentDepth: number;     // hef (inches)
   concreteStrength: number;   // f'c (psi)
   anchorLayout: AnchorLayout;
+
+  // ACI 318-19 Chapter 17 additional parameters
+  crackedConcrete?: boolean;   // Default true (conservative) — affects ψc,N, ψc,V, ψc,P
+  memberThickness?: number;    // ha (inches) — slab or wall thickness, for ψh,V
+
+  // Manufacturer product reference (optional)
+  selectedProduct?: AnchorProductRef;
+}
+
+export interface AnchorProductRef {
+  productId: string;
+  manufacturer: string;
+  productLine: string;
+  esrNumber: string;
+  // Product-specific capacities override generic ACI formulas
+  Np_cracked?: number;         // Nominal pullout, cracked concrete (lbs)
+  Np_uncracked?: number;       // Nominal pullout, uncracked concrete (lbs)
+  tau_cr_cracked?: number;     // Characteristic bond stress, cracked (psi) — adhesive only
+  tau_cr_uncracked?: number;   // Characteristic bond stress, uncracked (psi) — adhesive only
+  minEdgeDistance?: number;     // Minimum edge distance per ESR (inches)
+  minSpacing?: number;         // Minimum spacing per ESR (inches)
+  criticalEdgeDistance?: number; // cac for seismic (inches)
 }
 
 export type AnchorType = 'cast-in' | 'post-installed-expansion' | 'post-installed-adhesive';
@@ -141,12 +163,45 @@ export interface CalculationResults {
     concreteBreakoutTension: CapacityCheck;
     concreteBreakoutShear: CapacityCheck;
     concretePryout: CapacityCheck;
+    pullout: CapacityCheck;                    // ACI 318-19 §17.6.3
+    sideFaceBlowout: CapacityCheck | null;     // ACI 318-19 §17.6.4 — null if not applicable
+    adhesiveBond: CapacityCheck | null;        // ACI 318-19 §17.6.5 — null if not adhesive anchor
     interaction: CapacityCheck;
   };
+
+  // ψ Modification Factors Applied (for PE review transparency)
+  psiFactors: {
+    // Tension breakout
+    psiEdN: number;    // Edge effect — §17.6.2.4
+    psiCN: number;     // Cracking — §17.6.2.5
+    psiCpN: number;    // Post-installed cracking — §17.6.2.6
+    ANcRatio: number;  // ANc/ANco — projected area ratio
+
+    // Shear breakout
+    psiEdV: number;    // Edge effect — §17.7.2.4
+    psiCV: number;     // Cracking — §17.7.2.5
+    psiHV: number;     // Member thickness — §17.7.2.6
+    AVcRatio: number;  // AVc/AVco — projected area ratio
+  };
+
+  // Engineering Warnings
+  warnings: EngineeringWarning[];
 
   overallStatus: 'PASS' | 'FAIL';
   governingCheck: string;
   maxUtilizationRatio: number;
+}
+
+// ============================================================================
+// Engineering Warnings
+// ============================================================================
+
+export interface EngineeringWarning {
+  severity: 'error' | 'warning' | 'info';
+  code: string;          // e.g., "W-EDGE-MIN", "E-HEF-MIN"
+  message: string;       // Engineer-readable message
+  codeRef: string;       // ACI/ASCE section reference
+  category: 'input' | 'capacity' | 'layout' | 'seismic';
 }
 
 export interface CapacityCheck {

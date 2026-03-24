@@ -15,7 +15,11 @@ import {
   concreteBreakoutTensionCapacity,
   concreteBreakoutShearCapacity,
   concretePryoutCapacity,
+  pulloutCapacity,
+  sideFaceBlowoutCapacity,
+  adhesiveBondCapacity,
   interactionCheck,
+  generateWarnings,
   runCalculation,
 } from './calculations.ts';
 import type { SiteParams, EquipmentProperties, AnchorageConfig } from './types.ts';
@@ -210,30 +214,74 @@ describe('ACI 318-19 Capacity', () => {
   });
 
   it('concrete breakout tension: post-installed (kc=17)', () => {
-    // hef=5, f'c=3500, post-installed
-    const cap = concreteBreakoutTensionCapacity(5, 3500, 'post-installed-expansion');
+    // hef=5, f'c=3500, post-installed, no edge effects (ca_min large)
+    const result = concreteBreakoutTensionCapacity(5, 3500, 'post-installed-expansion');
     // Nb = 17 * 1.0 * sqrt(3500) * 5^1.5 = 17 * 59.16 * 11.18 = 11239
-    // φNcb = 0.70 * 11239 = 7867
-    expect(cap).toBeCloseTo(7867, -1); // Within 10 lbs
+    // φ = 0.65 (Condition B for post-installed)
+    // φNcb = 0.65 * 11239 = 7305
+    expect(result.capacity).toBeCloseTo(7305, -1); // Within 10 lbs
+    expect(result.psiEdN).toBe(1.0); // No edge effect (ca_min defaults to Infinity)
+    expect(result.psiCN).toBe(1.0);  // Cracked concrete default
   });
 
   it('concrete breakout tension: cast-in (kc=24)', () => {
     // hef=5, f'c=3500, cast-in
-    const cap = concreteBreakoutTensionCapacity(5, 3500, 'cast-in');
+    const result = concreteBreakoutTensionCapacity(5, 3500, 'cast-in');
     // Nb = 24 * 1.0 * sqrt(3500) * 5^1.5 = 24 * 59.16 * 11.18 = 15868
+    // φ = 0.70 (cast-in)
     // φNcb = 0.70 * 15868 = 11108
-    expect(cap).toBeCloseTo(11108, -1);
+    expect(result.capacity).toBeCloseTo(11108, -1);
+  });
+
+  it('concrete breakout tension: edge distance reduction', () => {
+    // hef=5, ca_min=4" < 1.5*5=7.5 → ψed,N = 0.7 + 0.3*(4/7.5) = 0.86
+    const result = concreteBreakoutTensionCapacity(5, 3500, 'post-installed-expansion', {
+      ca_min: 4,
+    });
+    expect(result.psiEdN).toBeCloseTo(0.86, 2);
+    // Capacity should be reduced vs no edge effect
+    const noEdge = concreteBreakoutTensionCapacity(5, 3500, 'post-installed-expansion');
+    expect(result.capacity).toBeLessThan(noEdge.capacity);
+  });
+
+  it('concrete breakout tension: uncracked concrete bonus', () => {
+    const cracked = concreteBreakoutTensionCapacity(5, 3500, 'post-installed-expansion', {
+      crackedConcrete: true,
+    });
+    const uncracked = concreteBreakoutTensionCapacity(5, 3500, 'post-installed-expansion', {
+      crackedConcrete: false,
+    });
+    expect(uncracked.psiCN).toBe(1.25);
+    expect(cracked.psiCN).toBe(1.0);
+    expect(uncracked.capacity).toBeGreaterThan(cracked.capacity);
   });
 
   it('concrete breakout shear', () => {
     // da=0.625, hef=5, f'c=3500, ca1=10
-    const cap = concreteBreakoutShearCapacity(0.625, 5, 3500, 10);
+    const result = concreteBreakoutShearCapacity(0.625, 5, 3500, 10);
     // le = min(5, 8*0.625) = min(5, 5) = 5
     // Vb = 7 * (5/0.625)^0.2 * 0.625^0.5 * 1.0 * sqrt(3500) * 10^1.5
-    //    = 7 * 8^0.2 * 0.7906 * 59.16 * 31.623
-    //    = 7 * 1.516 * 0.7906 * 59.16 * 31.623
-    expect(cap).toBeGreaterThan(5000);
-    expect(cap).toBeLessThan(20000);
+    expect(result.capacity).toBeGreaterThan(5000);
+    expect(result.capacity).toBeLessThan(20000);
+  });
+
+  it('concrete breakout shear: edge distance reduction', () => {
+    // ca2=5, ca1=10: ca2 < 1.5*ca1=15 → ψed,V = 0.7 + 0.3*(5/15) = 0.8
+    const result = concreteBreakoutShearCapacity(0.625, 5, 3500, 10, {
+      ca2: 5,
+    });
+    expect(result.psiEdV).toBeCloseTo(0.8, 2);
+  });
+
+  it('concrete breakout shear: member thickness factor', () => {
+    // ha=12, ca1=10: ha < 1.5*10=15 → ψh,V = √(15/12) = 1.118
+    const result = concreteBreakoutShearCapacity(0.625, 5, 3500, 10, {
+      memberThickness: 12,
+    });
+    expect(result.psiHV).toBeCloseTo(1.118, 2);
+    // Capacity should increase due to thin member correction
+    const noThickness = concreteBreakoutShearCapacity(0.625, 5, 3500, 10);
+    expect(result.capacity).toBeGreaterThan(noThickness.capacity);
   });
 
   it('concrete pryout: kcp=2.0 for hef >= 2.5', () => {
@@ -267,6 +315,183 @@ describe('ACI 318-19 Capacity', () => {
     const ratio = interactionCheck(0, 1000, 5000, 3000);
     // = (1000/3000)^(5/3) = 0.333^1.667 ≈ 0.160
     expect(ratio).toBeCloseTo(0.160, 2);
+  });
+});
+
+// ============================================================================
+// ACI 318-19 §17.6.3 — Pullout
+// ============================================================================
+
+describe('pulloutCapacity', () => {
+  it('returns null for post-installed without manufacturer data', () => {
+    const result = pulloutCapacity('post-installed-expansion', 4000);
+    expect(result).toBeNull();
+  });
+
+  it('calculates pullout with manufacturer data (cracked)', () => {
+    // Np_product = 5000 lbs, cracked
+    // φNp = 0.65 × 1.0 × 5000 = 3250
+    const result = pulloutCapacity('post-installed-expansion', 4000, {
+      crackedConcrete: true,
+      Np_product: 5000,
+    });
+    expect(result).toBeCloseTo(3250, 0);
+  });
+
+  it('applies uncracked bonus (ψc,P = 1.4)', () => {
+    // Np_product = 5000 lbs, uncracked
+    // φNp = 0.65 × 1.4 × 5000 = 4550
+    const result = pulloutCapacity('post-installed-expansion', 4000, {
+      crackedConcrete: false,
+      Np_product: 5000,
+    });
+    expect(result).toBeCloseTo(4550, 0);
+  });
+
+  it('calculates cast-in headed anchor pullout', () => {
+    // Abrg = 1.5 in², f'c = 4000
+    // Np = 8 × 1.5 × 4000 = 48000
+    // φNp = 0.70 × 1.0 × 48000 = 33600
+    const result = pulloutCapacity('cast-in', 4000, {
+      crackedConcrete: true,
+      Abrg: 1.5,
+    });
+    expect(result).toBeCloseTo(33600, 0);
+  });
+});
+
+// ============================================================================
+// ACI 318-19 §17.6.4 — Side-Face Blowout
+// ============================================================================
+
+describe('sideFaceBlowoutCapacity', () => {
+  it('returns null when hef ≤ 2.5×ca1 (not applicable)', () => {
+    // hef=5, ca1=4: 5 ≤ 2.5×4=10 → not applicable
+    const result = sideFaceBlowoutCapacity(5, 4, 4000, 'post-installed-expansion');
+    expect(result).toBeNull();
+  });
+
+  it('returns null when no bearing area provided', () => {
+    // hef=10, ca1=3: 10 > 2.5×3=7.5 → applies, but no Abrg
+    const result = sideFaceBlowoutCapacity(10, 3, 4000, 'post-installed-expansion');
+    expect(result).toBeNull();
+  });
+
+  it('calculates blowout when hef > 2.5×ca1', () => {
+    // hef=10, ca1=3, f'c=4000, Abrg=1.0 in²
+    // Nsb = 13 × 3 × √1.0 × 1.0 × √4000 = 13 × 3 × 1 × 63.25 = 2466.6
+    // φNsb = 0.65 × 2466.6 = 1603.3 (post-installed)
+    const result = sideFaceBlowoutCapacity(10, 3, 4000, 'post-installed-expansion', 1.0);
+    expect(result).toBeCloseTo(1603, -1);
+  });
+});
+
+// ============================================================================
+// ACI 318-19 §17.6.5 — Adhesive Bond
+// ============================================================================
+
+describe('adhesiveBondCapacity', () => {
+  it('returns null for non-adhesive anchors', () => {
+    const result = adhesiveBondCapacity(0.625, 5, 'post-installed-expansion');
+    expect(result).toBeNull();
+  });
+
+  it('returns null without manufacturer tau_cr', () => {
+    const result = adhesiveBondCapacity(0.625, 5, 'post-installed-adhesive');
+    expect(result).toBeNull();
+  });
+
+  it('calculates bond strength with tau_cr', () => {
+    // da=0.625, hef=5, tau_cr=1200 psi (cracked)
+    // Na0 = 1200 × π × 0.625 × 5 = 11781
+    // φNa = 0.65 × 1.0 × 1.0 × 11781 = 7658
+    const result = adhesiveBondCapacity(0.625, 5, 'post-installed-adhesive', {
+      tau_cr: 1200,
+      crackedConcrete: true,
+    });
+    expect(result).not.toBeNull();
+    expect(result!.capacity).toBeCloseTo(7658, -1);
+  });
+
+  it('calculates cNa critical distance', () => {
+    const result = adhesiveBondCapacity(0.625, 5, 'post-installed-adhesive', {
+      tau_cr: 1200,
+    });
+    // cNa = 10 × 0.625 × √(1200/1100) = 10 × 0.625 × 1.0445 = 6.528
+    expect(result).not.toBeNull();
+    expect(result!.cNa).toBeCloseTo(6.528, 1);
+  });
+
+  it('reduces capacity for edge distance < cNa', () => {
+    const noEdge = adhesiveBondCapacity(0.625, 5, 'post-installed-adhesive', {
+      tau_cr: 1200,
+      ca_min: 20, // Far from edge
+    });
+    const nearEdge = adhesiveBondCapacity(0.625, 5, 'post-installed-adhesive', {
+      tau_cr: 1200,
+      ca_min: 3, // Close to edge, < cNa
+    });
+    expect(noEdge).not.toBeNull();
+    expect(nearEdge).not.toBeNull();
+    expect(nearEdge!.capacity).toBeLessThan(noEdge!.capacity);
+  });
+});
+
+// ============================================================================
+// Engineering Warnings
+// ============================================================================
+
+describe('generateWarnings', () => {
+  it('warns when embedment is less than 4×da', () => {
+    const anchor = makeAnchor({
+      anchorDiameter: 0.625,
+      embedmentDepth: 2, // < 4 × 0.625 = 2.5
+    });
+    const site = makeSite();
+    const equip = makeEquip();
+    const results = runCalculation(site, equip, anchor);
+    if (!results) return;
+    const warnings = generateWarnings(anchor, site, equip, results.checks);
+    expect(warnings.some(w => w.code === 'E-HEF-MIN')).toBe(true);
+  });
+
+  it('warns when no manufacturer product selected for post-installed', () => {
+    const anchor = makeAnchor({ anchorType: 'post-installed-expansion' });
+    const site = makeSite();
+    const equip = makeEquip();
+    const results = runCalculation(site, equip, anchor);
+    if (!results) return;
+    const warnings = generateWarnings(anchor, site, equip, results.checks);
+    expect(warnings.some(w => w.code === 'W-NO-PRODUCT')).toBe(true);
+  });
+
+  it('warns about adhesive anchor in high seismic', () => {
+    const anchor = makeAnchor({ anchorType: 'post-installed-adhesive' });
+    const site = makeSite({ seismicDesignCategory: 'D' });
+    const equip = makeEquip();
+    const results = runCalculation(site, equip, anchor);
+    if (!results) return;
+    const warnings = generateWarnings(anchor, site, equip, results.checks);
+    expect(warnings.some(w => w.code === 'W-SDC-D-ADHESIVE')).toBe(true);
+  });
+
+  it('warns when edge distance reduces capacity', () => {
+    const anchor = makeAnchor({
+      embedmentDepth: 5,
+      anchorLayout: {
+        pattern: '2x2',
+        nLong: 2,
+        nTrans: 2,
+        spacing: { longitudinal: 48, transverse: 24 },
+        edgeDistance: { ca1: 3, ca2: 3 }, // ca1 < 1.5*hef=7.5
+      },
+    });
+    const site = makeSite();
+    const equip = makeEquip();
+    const results = runCalculation(site, equip, anchor);
+    if (!results) return;
+    const warnings = generateWarnings(anchor, site, equip, results.checks);
+    expect(warnings.some(w => w.code === 'W-EDGE-REDUCED')).toBe(true);
   });
 });
 
