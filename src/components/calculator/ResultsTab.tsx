@@ -1,5 +1,5 @@
 import type { CalculationResults, CapacityCheck, SiteParams, EquipmentProperties, AnchorageConfig } from '@/lib/types.ts';
-import { CheckCircle, XCircle, AlertTriangle } from 'lucide-react';
+import { CheckCircle, XCircle, AlertTriangle, Info } from 'lucide-react';
 import { EquationBlock } from '@/components/report/EquationBlock.tsx';
 import { EquipmentFBD } from '@/components/diagrams/EquipmentFBD.tsx';
 import { AnchorDetailDiagram } from '@/components/diagrams/AnchorDetailDiagram.tsx';
@@ -67,6 +67,54 @@ export function ResultsTab({
           </button>
         </div>
       </div>
+
+      {/* Engineering Warnings */}
+      {results.warnings && results.warnings.length > 0 && (
+        <div className="space-y-2">
+          {results.warnings.map((w, i) => (
+            <div
+              key={i}
+              className={`flex items-start gap-2 p-3 rounded-lg border text-sm ${
+                w.severity === 'error'
+                  ? 'bg-fail/10 border-fail/30 text-fail'
+                  : w.severity === 'warning'
+                  ? 'bg-amber-500/10 border-amber-500/30 text-amber-700 dark:text-amber-400'
+                  : 'bg-blue-500/10 border-blue-500/30 text-blue-700 dark:text-blue-400'
+              }`}
+            >
+              {w.severity === 'error' ? (
+                <XCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+              ) : w.severity === 'warning' ? (
+                <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+              ) : (
+                <Info className="w-4 h-4 flex-shrink-0 mt-0.5" />
+              )}
+              <div>
+                <span className="font-mono text-xs mr-2">[{w.code}]</span>
+                {w.message}
+                <span className="text-xs opacity-70 ml-2">({w.codeRef})</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ψ Modification Factors */}
+      {results.psiFactors && (
+        <Section title="Modification Factors Applied (ACI 318-19)">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <ValueCard label="ψed,N" value={results.psiFactors.psiEdN.toFixed(3)} sub="Edge (tension)" />
+            <ValueCard label="ψc,N" value={results.psiFactors.psiCN.toFixed(3)} sub="Cracking (tension)" />
+            <ValueCard label="ψed,V" value={results.psiFactors.psiEdV.toFixed(3)} sub="Edge (shear)" />
+            <ValueCard label="ψc,V" value={results.psiFactors.psiCV.toFixed(3)} sub="Cracking (shear)" />
+          </div>
+          {results.psiFactors.psiHV !== 1.0 && (
+            <div className="mt-2">
+              <ValueCard label="ψh,V" value={results.psiFactors.psiHV.toFixed(3)} sub="Member thickness (shear)" />
+            </div>
+          )}
+        </Section>
+      )}
 
       {/* Seismic Force Breakdown */}
       <Section title="Seismic Force (ASCE 7-22 Eq. 13.3-1)">
@@ -323,6 +371,9 @@ function formatCheckName(key: string): string {
     concreteBreakoutTension: 'Concrete Breakout (Tension)',
     concreteBreakoutShear: 'Concrete Breakout (Shear)',
     concretePryout: 'Concrete Pryout',
+    pullout: 'Pullout',
+    sideFaceBlowout: 'Side-Face Blowout',
+    adhesiveBond: 'Adhesive Bond',
     interaction: 'Tension-Shear Interaction',
   };
   return names[key] || key;

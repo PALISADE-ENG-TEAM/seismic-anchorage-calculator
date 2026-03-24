@@ -16,6 +16,9 @@ const CHECK_LABELS: Record<string, string> = {
   concreteBreakoutTension: 'Concrete Breakout in Tension',
   concreteBreakoutShear: 'Concrete Breakout in Shear',
   concretePryout: 'Concrete Pryout',
+  pullout: 'Pullout',
+  sideFaceBlowout: 'Side-Face Blowout',
+  adhesiveBond: 'Adhesive Bond',
   interaction: 'Tension-Shear Interaction',
 };
 

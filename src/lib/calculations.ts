@@ -14,6 +14,10 @@ import type {
   CapacityCheck,
   AnchorType,
   EngineeringWarning,
+  AnchorPosition,
+  AnchorForceResult,
+  BoltGroupResults,
+  SDCExemptionResult,
 } from './types.ts';
 import { getAnchorProps, getFuta } from './constants.ts';
 
@@ -121,6 +125,105 @@ export function calculateFp(
   const fpDesign = Math.min(Math.max(fpCalculated, fpMinimum), fpMaximum);
 
   return { fpCalculated, fpMinimum, fpMaximum, fpDesign };
+}
+
+/**
+ * Floor Acceleration Alternative — ASCE 7-22 Section 13.3.1.1
+ *
+ * When actual floor response spectra are available from structural analysis,
+ * Ai replaces the equation-based Hf/Rμ approach.
+ *
+ * Fp = Ai × (CAR / Rpo) × Ip × Wp
+ * Bounded by Fp_min and Fp_max (same as standard approach).
+ */
+export function calculateFpFromFloorAccel(
+  Ai: number,
+  SDS: number,
+  Ip: number,
+  Wp: number,
+  CAR: number,
+  Rpo: number
+): { fpCalculated: number; fpMinimum: number; fpMaximum: number; fpDesign: number } {
+  const fpCalculated = Ai * (CAR / Rpo) * Ip * Wp;
+  const fpMinimum = 0.3 * SDS * Ip * Wp;
+  const fpMaximum = 1.6 * SDS * Ip * Wp;
+  const fpDesign = Math.min(Math.max(fpCalculated, fpMinimum), fpMaximum);
+  return { fpCalculated, fpMinimum, fpMaximum, fpDesign };
+}
+
+// ============================================================================
+// SDC Exemption Check — ASCE 7-22 Section 13.1.4
+// ============================================================================
+
+/**
+ * Check whether a nonstructural component is exempt from seismic requirements
+ * per ASCE 7-22 Section 13.1.4, Items 1-6.
+ *
+ * Returns the first matching exemption or 'required'.
+ */
+export function checkSDCExemption(
+  sdc: string,
+  Ip: number,
+  z: number,
+  h: number,
+  weight: number,
+  componentCategory: 'mechanical' | 'electrical' | 'architectural'
+): SDCExemptionResult {
+  const sdcUpper = sdc.toUpperCase();
+
+  // Item 1: SDC A — all nonstructural components exempt
+  if (sdcUpper === 'A') {
+    return {
+      status: 'exempt',
+      reason: 'SDC A — All nonstructural components exempt from seismic requirements.',
+      codeRef: '§13.1.4 Item 1',
+    };
+  }
+
+  const zh = h > 0 ? z / h : 0;
+  const isMEP = componentCategory === 'mechanical' || componentCategory === 'electrical';
+
+  // Item 3: M/E/P components ≤ 20 lbs with Ip = 1.0 in SDC B or C
+  if ((sdcUpper === 'B' || sdcUpper === 'C') && isMEP && Ip <= 1.0 && weight <= 20) {
+    return {
+      status: 'exempt',
+      reason: 'M/E/P component ≤ 20 lbs with Ip = 1.0 in SDC B/C.',
+      codeRef: '§13.1.4 Item 3',
+    };
+  }
+
+  // Item 2: M/E/P components with Ip = 1.0 in SDC B or C, z ≤ 2h/3
+  if ((sdcUpper === 'B' || sdcUpper === 'C') && isMEP && Ip <= 1.0 && zh <= 2 / 3) {
+    return {
+      status: 'exempt',
+      reason: 'M/E/P component with Ip = 1.0 in SDC B/C, at or below 2/3 of building height.',
+      codeRef: '§13.1.4 Item 2',
+    };
+  }
+
+  // Item 5: Architectural components with Ip = 1.0 in SDC B, fastened to structure
+  if (sdcUpper === 'B' && componentCategory === 'architectural' && Ip <= 1.0) {
+    return {
+      status: 'exempt',
+      reason: 'Architectural component with Ip = 1.0 in SDC B.',
+      codeRef: '§13.1.4 Item 5',
+    };
+  }
+
+  // Item 6: Architectural components with Ip = 1.0 in SDC C, at/below grade
+  if (sdcUpper === 'C' && componentCategory === 'architectural' && Ip <= 1.0 && z <= 0) {
+    return {
+      status: 'exempt',
+      reason: 'Architectural component with Ip = 1.0 in SDC C, at or below grade.',
+      codeRef: '§13.1.4 Item 6',
+    };
+  }
+
+  return {
+    status: 'required',
+    reason: 'Full seismic analysis required.',
+    codeRef: '§13.1.4',
+  };
 }
 
 // ============================================================================
@@ -243,6 +346,319 @@ export function calculateAnchorDemands(
   const vuPerAnchor = nTotal > 0 ? (Fp * Omega0p) / nTotal : 0;
 
   return { tuPerAnchor, vuPerAnchor };
+}
+
+// ============================================================================
+// Rigid Bolt Group Analysis — Classical Rigid Body Method
+// ============================================================================
+
+/**
+ * Generate anchor positions from rectangular grid parameters.
+ * Centers bolt group on equipment footprint.
+ * Origin (0,0) = bottom-left corner of equipment.
+ */
+export function generateAnchorPositions(
+  nLong: number,
+  nTrans: number,
+  sx: number,
+  sy: number,
+  equipLength: number,
+  equipWidth: number
+): AnchorPosition[] {
+  const anchors: AnchorPosition[] = [];
+  const totalSx = (nLong - 1) * sx;
+  const totalSy = (nTrans - 1) * sy;
+  const startX = (equipLength - totalSx) / 2;
+  const startY = (equipWidth - totalSy) / 2;
+
+  for (let col = 0; col < nLong; col++) {
+    for (let row = 0; row < nTrans; row++) {
+      anchors.push({
+        id: `a-${col}-${row}`,
+        x: startX + col * sx,
+        y: startY + row * sy,
+      });
+    }
+  }
+  return anchors;
+}
+
+/**
+ * Calculate bolt group centroid from anchor positions.
+ * x̄ = Σxi/N, ȳ = Σyi/N
+ */
+export function calculateBoltGroupCentroid(
+  anchors: AnchorPosition[]
+): { x: number; y: number } {
+  const n = anchors.length;
+  if (n === 0) return { x: 0, y: 0 };
+  const sumX = anchors.reduce((s, a) => s + a.x, 0);
+  const sumY = anchors.reduce((s, a) => s + a.y, 0);
+  return { x: sumX / n, y: sumY / n };
+}
+
+/**
+ * Calculate bolt group geometric properties about the centroid.
+ * Ix = Σdy², Iy = Σdx², Ip = Ix + Iy
+ * Returns relative positions (dx, dy) for each anchor.
+ */
+export function calculateBoltGroupProperties(
+  anchors: AnchorPosition[],
+  centroid: { x: number; y: number }
+): {
+  Ix: number;
+  Iy: number;
+  Ip: number;
+  relativePositions: Array<{ id: string; dx: number; dy: number }>;
+} {
+  const relativePositions = anchors.map(a => ({
+    id: a.id,
+    dx: a.x - centroid.x,
+    dy: a.y - centroid.y,
+  }));
+  const Ix = relativePositions.reduce((s, p) => s + p.dy * p.dy, 0);
+  const Iy = relativePositions.reduce((s, p) => s + p.dx * p.dx, 0);
+  const Ip = Ix + Iy;
+  return { Ix, Iy, Ip, relativePositions };
+}
+
+/**
+ * Rigid Bolt Group Demand Analysis
+ *
+ * Analyzes both X and Y seismic directions independently, combines with
+ * vertical seismic per ASCE 7-22 §2.3.6, and identifies the critical anchor.
+ *
+ * For each direction:
+ * - Direct shear: Vdirect = Fp×Ω0p / N (equal distribution)
+ * - Torsional shear from eccentricity between CG and bolt group centroid
+ * - Overturning tension distributed by distance from neutral axis
+ * - Vertical seismic: Ev = ±0.2×SDS×Wp per ASCE 7-22 load combinations
+ *
+ * Pivot methods:
+ * - 'centroid': Pivot about bolt group centroid (classical bolt group analysis)
+ * - 'compression-edge': Pivot about compression-side bolt row
+ */
+export function calculateRigidBoltGroupDemands(
+  Fp: number,
+  Wp: number,
+  Omega0p: number,
+  SDS: number,
+  cgHeight_in: number,
+  cgX: number,
+  cgY: number,
+  anchors: AnchorPosition[],
+  pivotMethod: 'centroid' | 'compression-edge'
+): BoltGroupResults {
+  const n = anchors.length;
+  if (n === 0) {
+    throw new Error('Bolt group must have at least one anchor');
+  }
+
+  // --- Step 1: Bolt group geometry ---
+  const centroid = calculateBoltGroupCentroid(anchors);
+  const { Ix, Iy, Ip, relativePositions } = calculateBoltGroupProperties(anchors, centroid);
+  const ex = cgX - centroid.x;
+  const ey = cgY - centroid.y;
+
+  // Vertical seismic component per ASCE 7-22 §12.4.2.2
+  // Ev = 0.2 × SDS × D. For uplift: use (0.9 - 0.2×SDS)×D
+  // The net gravity per anchor for the uplift case:
+  const gravityPerAnchor_uplift = (0.9 - 0.2 * SDS) * Wp / n; // Positive = downward (stabilizing)
+
+  // Overturning moment from seismic force (same both directions)
+  const hcg_in = cgHeight_in; // Keep in inches for consistency
+
+  // --- Step 2: Analyze each seismic direction ---
+
+  // Helper: analyze one seismic direction
+  function analyzeDirection(
+    seismicDir: 'x' | 'y'
+  ): {
+    perAnchor: Array<{
+      id: string;
+      vDirectX: number; vDirectY: number;
+      vTorsionX: number; vTorsionY: number;
+      vCombined: number;
+      tMoment: number; tCombined: number;
+    }>;
+    torsionalMoment: number;
+  } {
+    const FpOmega = Fp * Omega0p;
+
+    // Direct shear — equal distribution along seismic direction
+    const vDirectX = seismicDir === 'x' ? FpOmega / n : 0;
+    const vDirectY = seismicDir === 'y' ? FpOmega / n : 0;
+
+    // Torsional moment from eccentricity
+    // Seismic in X: torsion = FpΩ0p × ey (perpendicular eccentricity)
+    // Seismic in Y: torsion = FpΩ0p × ex (perpendicular eccentricity)
+    // Sign convention: positive torsion = counterclockwise
+    let Mt = 0;
+    if (seismicDir === 'x') {
+      Mt = FpOmega * ey; // Force in X, eccentricity in Y
+    } else {
+      Mt = -FpOmega * ex; // Force in Y, eccentricity in X (negative for CCW convention)
+    }
+
+    // Torsional shear per bolt (only if Ip > 0)
+    const torsionalShears = relativePositions.map(p => {
+      if (Ip <= 0) return { vtx: 0, vty: 0 };
+      // Torsional shear is perpendicular to radius vector
+      return {
+        vtx: -Mt * p.dy / Ip,
+        vty: Mt * p.dx / Ip,
+      };
+    });
+
+    // Overturning about the bolt group
+    // Overturning moment = Fp × Ω0p × hcg (in lb-in, keep consistent)
+    const M_ot = FpOmega * hcg_in; // lb-in
+
+    // Determine pivot point and resisting moment based on pivot method
+    let tensionPerAnchor: number[];
+
+    if (pivotMethod === 'centroid') {
+      // Pivot about centroid — tension distributed by distance
+      // For seismic in X: overturning about Y-axis → tension varies with dx
+      // For seismic in Y: overturning about X-axis → tension varies with dy
+      const useIx = seismicDir === 'y'; // Moment about X-axis when force is in Y
+      const I_axis = useIx ? Ix : Iy;
+
+      // Centroid pivot: distribute overturning moment to anchors by distance from centroid.
+      // Gravity is subtracted uniformly (each anchor gets gravityPerAnchor_uplift).
+      const M_net = M_ot;
+
+      if (I_axis > 0) {
+        tensionPerAnchor = relativePositions.map(p => {
+          const d = seismicDir === 'x' ? p.dx : p.dy;
+          // Tension from overturning: T_i = M_net × d_i / Σd_i²
+          // Positive d = tension side (force pushes away from this anchor)
+          // Sign: anchors with negative d (opposite to force direction) go into tension
+          const tFromMoment = -M_net * d / I_axis; // Negative d → positive tension
+          return tFromMoment;
+        });
+        // Subtract uniform gravity from each anchor
+        tensionPerAnchor = tensionPerAnchor.map(t => Math.max(0, t - gravityPerAnchor_uplift));
+      } else {
+        tensionPerAnchor = relativePositions.map(() => 0);
+      }
+    } else {
+      // Pivot about compression-edge bolt
+      // Find the compression-edge bolt (most positive d in the force direction)
+      const distances = relativePositions.map(p =>
+        seismicDir === 'x' ? p.dx : p.dy
+      );
+      const maxD = Math.max(...distances);
+
+      // Actual distance from CG to compression edge bolt (in inches):
+      const armFromCGToEdgeBolt_in = maxD + (seismicDir === 'x' ? (centroid.x - cgX) : (centroid.y - cgY));
+
+      // Resisting moment about compression edge bolt
+      const totalGravity = (0.9 - 0.2 * SDS) * Wp;
+      const M_resist = totalGravity * Math.abs(armFromCGToEdgeBolt_in); // lb-in
+
+      const M_net = Math.max(0, M_ot - M_resist);
+
+      // Distribute net tension moment to anchors by distance from compression edge bolt
+      // d_i = maxD - d_actual for each anchor (distance from compression pivot)
+      const leverArms = distances.map(d => maxD - d);
+      const sumLeverArmsSq = leverArms.reduce((s, l) => s + l * l, 0);
+
+      if (sumLeverArmsSq > 0 && M_net > 0) {
+        tensionPerAnchor = leverArms.map(l => {
+          const t = M_net * l / sumLeverArmsSq;
+          return Math.max(0, t); // Only positive tension
+        });
+      } else {
+        tensionPerAnchor = relativePositions.map(() => 0);
+      }
+    }
+
+    // Combine per-anchor results
+    const perAnchor = relativePositions.map((p, i) => {
+      const vtx = torsionalShears[i].vtx;
+      const vty = torsionalShears[i].vty;
+      const totalVx = vDirectX + vtx;
+      const totalVy = vDirectY + vty;
+      const vCombined = Math.sqrt(totalVx * totalVx + totalVy * totalVy);
+      const tMoment = tensionPerAnchor[i];
+      const tCombined = Math.max(0, tMoment); // Net tension (no compression)
+      return {
+        id: p.id,
+        vDirectX, vDirectY,
+        vTorsionX: vtx, vTorsionY: vty,
+        vCombined,
+        tMoment,
+        tCombined,
+      };
+    });
+
+    return { perAnchor, torsionalMoment: Mt };
+  }
+
+  // Analyze both directions
+  const resultX = analyzeDirection('x');
+  const resultY = analyzeDirection('y');
+
+  // --- Step 3: Envelope — take max demands from either direction per anchor ---
+  const anchorForces: AnchorForceResult[] = relativePositions.map((p, i) => {
+    const ax = resultX.perAnchor[i];
+    const ay = resultY.perAnchor[i];
+
+    // Take the direction that produces higher combined demand for each anchor
+    const vCombined = Math.max(ax.vCombined, ay.vCombined);
+    const tCombined = Math.max(ax.tCombined, ay.tCombined);
+
+    // Use the components from the governing direction for shear
+    const useX = ax.vCombined >= ay.vCombined;
+    const vDirectX = useX ? ax.vDirectX : ay.vDirectX;
+    const vDirectY = useX ? ax.vDirectY : ay.vDirectY;
+    const vTorsionX = useX ? ax.vTorsionX : ay.vTorsionX;
+    const vTorsionY = useX ? ax.vTorsionY : ay.vTorsionY;
+
+    return {
+      anchorId: p.id,
+      position: { x: p.dx, y: p.dy },
+      vDirectX,
+      vDirectY,
+      vTorsionX,
+      vTorsionY,
+      vCombined,
+      tDirect: 0, // Direct tension from gravity handled in moment calc
+      tMomentX: resultY.perAnchor[i].tMoment, // Seismic in Y → moment about X
+      tMomentY: resultX.perAnchor[i].tMoment, // Seismic in X → moment about Y
+      tCombined,
+      interactionRatio: 0, // Computed after capacity checks
+      isCritical: false,   // Set below
+    };
+  });
+
+  // --- Step 4: Identify critical anchor (highest combined demand proxy) ---
+  // Use a simple demand metric: Tu + Vu as a proxy before capacity checks
+  // The real interaction ratio is computed later when capacities are known
+  let maxDemand = 0;
+  let criticalIdx = 0;
+  for (let i = 0; i < anchorForces.length; i++) {
+    const demand = anchorForces[i].tCombined + anchorForces[i].vCombined;
+    if (demand > maxDemand) {
+      maxDemand = demand;
+      criticalIdx = i;
+    }
+  }
+  anchorForces[criticalIdx].isCritical = true;
+
+  return {
+    anchorForces,
+    criticalAnchorId: anchorForces[criticalIdx].anchorId,
+    boltGroupCentroid: centroid,
+    cgPosition: { x: cgX, y: cgY },
+    eccentricity: { ex, ey },
+    Ix,
+    Iy,
+    Ip,
+    torsionalMomentX: resultX.torsionalMoment,
+    torsionalMomentY: resultY.torsionalMoment,
+  };
 }
 
 // ============================================================================
@@ -816,17 +1232,35 @@ export function runCalculation(
 
   // --- Step 1: ASCE 7-22 Seismic Force ---
 
-  const Hf = calculateHf(site.attachmentHeight, site.buildingHeight, site.Ta_approx);
-  const Rmu = calculateRmu(
-    site.attachmentHeight,
-    site.R_building,
-    site.Omega0_building,
-    site.Ie_building
-  );
+  const approach = site.seismicApproach ?? 'general';
   const CAR = getCAR(site.attachmentHeight, equip.CAR_atGrade, equip.CAR_aboveGrade);
   const Rpo = equip.Rpo;
 
-  const fp = calculateFp(site.SDS, site.Ip, equip.weight, Hf, Rmu, CAR, Rpo);
+  let Hf: number;
+  let Rmu: number;
+  let fp: { fpCalculated: number; fpMinimum: number; fpMaximum: number; fpDesign: number };
+
+  if (approach === 'floor-accel' && site.Ai_override != null && site.Ai_override > 0) {
+    // Floor acceleration alternative — §13.3.1.1
+    Hf = 0;  // Not used in floor-accel approach
+    Rmu = 0; // Not used in floor-accel approach
+    fp = calculateFpFromFloorAccel(site.Ai_override, site.SDS, site.Ip, equip.weight, CAR, Rpo);
+  } else if (approach === 'known-sfrs') {
+    // Known SFRS — use stored building parameters
+    Hf = calculateHf(site.attachmentHeight, site.buildingHeight, site.Ta_approx);
+    Rmu = calculateRmu(
+      site.attachmentHeight,
+      site.R_building,
+      site.Omega0_building,
+      site.Ie_building
+    );
+    fp = calculateFp(site.SDS, site.Ip, equip.weight, Hf, Rmu, CAR, Rpo);
+  } else {
+    // General case — conservative defaults: Eq 13.3-5, Rmu = 1.3
+    Hf = calculateHf(site.attachmentHeight, site.buildingHeight, null);
+    Rmu = site.attachmentHeight <= 0 ? 1.0 : 1.3;
+    fp = calculateFp(site.SDS, site.Ip, equip.weight, Hf, Rmu, CAR, Rpo);
+  }
 
   // --- Step 2: Overturning Analysis ---
 
@@ -842,16 +1276,55 @@ export function runCalculation(
 
   // --- Step 3: Anchor Demands ---
 
-  const demands = calculateAnchorDemands(
-    fp.fpDesign,
-    equip.weight,
-    equip.Omega0p,
-    overturning,
-    anchor.anchorLayout.nLong,
-    anchor.anchorLayout.nTrans,
-    anchor.anchorLayout.spacing.longitudinal,
-    anchor.anchorLayout.spacing.transverse
-  );
+  let demands: { tuPerAnchor: number; vuPerAnchor: number };
+  let boltGroupResult: BoltGroupResults | undefined;
+
+  if (anchor.anchorLayout.analysisMethod === 'rigid-bolt-group') {
+    // Rigid bolt group analysis
+    const positions = anchor.anchorLayout.anchors
+      ?? generateAnchorPositions(
+        anchor.anchorLayout.nLong,
+        anchor.anchorLayout.nTrans,
+        anchor.anchorLayout.spacing.longitudinal,
+        anchor.anchorLayout.spacing.transverse,
+        equip.length,
+        equip.width
+      );
+    const cgX = equip.length / 2 + (equip.cgOffsetX ?? 0);
+    const cgY = equip.width / 2 + (equip.cgOffsetY ?? 0);
+    const pivotMethod = anchor.anchorLayout.pivotMethod ?? 'centroid';
+
+    boltGroupResult = calculateRigidBoltGroupDemands(
+      fp.fpDesign,
+      equip.weight,
+      equip.Omega0p,
+      site.SDS,
+      equip.cgHeight,
+      cgX,
+      cgY,
+      positions,
+      pivotMethod
+    );
+
+    // Use critical anchor demands for ACI capacity checks
+    const critical = boltGroupResult.anchorForces.find(a => a.isCritical)!;
+    demands = {
+      tuPerAnchor: critical.tCombined,
+      vuPerAnchor: critical.vCombined,
+    };
+  } else {
+    // Simple analysis (original method)
+    demands = calculateAnchorDemands(
+      fp.fpDesign,
+      equip.weight,
+      equip.Omega0p,
+      overturning,
+      anchor.anchorLayout.nLong,
+      anchor.anchorLayout.nTrans,
+      anchor.anchorLayout.spacing.longitudinal,
+      anchor.anchorLayout.spacing.transverse
+    );
+  }
 
   // --- Step 4: ACI 318-19 Capacity Checks ---
 
@@ -1049,16 +1522,39 @@ export function runCalculation(
     }
   }
 
+  // --- Update bolt group interaction ratios if applicable ---
+
+  if (boltGroupResult) {
+    for (const af of boltGroupResult.anchorForces) {
+      af.interactionRatio = interactionCheck(af.tCombined, af.vCombined, phiNn, phiVn);
+    }
+    // Re-identify critical anchor by interaction ratio
+    let maxIR = 0;
+    let critId = boltGroupResult.criticalAnchorId;
+    for (const af of boltGroupResult.anchorForces) {
+      af.isCritical = false;
+      if (af.interactionRatio > maxIR) {
+        maxIR = af.interactionRatio;
+        critId = af.anchorId;
+      }
+    }
+    const critAnchor = boltGroupResult.anchorForces.find(a => a.anchorId === critId);
+    if (critAnchor) critAnchor.isCritical = true;
+    boltGroupResult.criticalAnchorId = critId;
+  }
+
   // --- Generate Engineering Warnings ---
 
   const warnings = generateWarnings(anchor, site, equip, checks);
 
   // --- Load Case Reactions (before combinations/overstrength) ---
-  const nTotal = anchor.anchorLayout.nLong * anchor.anchorLayout.nTrans;
+  const nTotal = anchor.anchorLayout.anchors?.length
+    ?? anchor.anchorLayout.nLong * anchor.anchorLayout.nTrans;
   const tuWithoutOmega = equip.Omega0p > 0 ? demands.tuPerAnchor / equip.Omega0p : 0;
   const vuWithoutOmega = equip.Omega0p > 0 ? demands.vuPerAnchor / equip.Omega0p : 0;
 
   return {
+    seismicApproach: site.seismicApproach ?? 'general',
     Hf,
     Rmu,
     CAR,
@@ -1092,6 +1588,7 @@ export function runCalculation(
     },
     tuPerAnchor: demands.tuPerAnchor,
     vuPerAnchor: demands.vuPerAnchor,
+    boltGroup: boltGroupResult,
     checks,
     psiFactors,
     warnings,

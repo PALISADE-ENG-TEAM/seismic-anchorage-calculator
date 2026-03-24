@@ -1,5 +1,7 @@
+import { useState } from 'react';
 import type { AnchorageConfig, AnchorType, AnchorMaterial } from '@/lib/types.ts';
 import { ANCHOR_STEEL_PROPERTIES, CONCRETE_STRENGTHS } from '@/lib/constants.ts';
+import { ANCHOR_PRODUCTS, getProductCapacity } from '@/lib/anchor-products.ts';
 import { AnchorDiagram } from '@/components/diagrams/AnchorDiagram.tsx';
 
 const ANCHOR_TYPES: { value: AnchorType; label: string }[] = [
@@ -103,7 +105,37 @@ export function AnchorageTab({
               ))}
             </select>
           </label>
+          <div className="grid grid-cols-2 gap-3">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={config.crackedConcrete ?? true}
+                onChange={(e) => onChange({ crackedConcrete: e.target.checked })}
+                className="w-4 h-4 rounded border-border text-primary focus:ring-ring"
+              />
+              <span className="text-xs text-muted-foreground">Cracked Concrete</span>
+            </label>
+            <NumField
+              label="Member Thickness, ha (in)"
+              value={config.memberThickness ?? 0}
+              onChange={(v) => onChange({ memberThickness: v })}
+              step={0.5}
+            />
+          </div>
         </fieldset>
+
+        {/* Manufacturer Product Selection */}
+        {config.anchorType !== 'cast-in' && (
+          <fieldset className="space-y-3">
+            <legend className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+              Manufacturer Product (Optional)
+            </legend>
+            <ProductSelector
+              config={config}
+              onChange={onChange}
+            />
+          </fieldset>
+        )}
 
         {/* Anchor Layout */}
         <fieldset className="space-y-3">
@@ -183,6 +215,79 @@ export function AnchorageTab({
           equipWidth={equipWidth}
         />
       </div>
+    </div>
+  );
+}
+
+function ProductSelector({
+  config,
+  onChange,
+}: {
+  config: AnchorageConfig;
+  onChange: (updates: Partial<AnchorageConfig>) => void;
+}) {
+  const [selectedProductId, setSelectedProductId] = useState(config.selectedProduct?.productId ?? '');
+
+  const filteredProducts = ANCHOR_PRODUCTS.filter(p => {
+    if (config.anchorType === 'post-installed-adhesive') return p.type === 'adhesive';
+    return p.type !== 'adhesive'; // expansion, screw, undercut
+  });
+
+  const handleProductChange = (productId: string) => {
+    setSelectedProductId(productId);
+    if (!productId) {
+      onChange({ selectedProduct: undefined });
+      return;
+    }
+    const product = ANCHOR_PRODUCTS.find(p => p.id === productId);
+    if (!product) return;
+
+    // Find matching capacity data
+    const cap = getProductCapacity(product, config.anchorDiameter, config.embedmentDepth, config.concreteStrength);
+
+    onChange({
+      selectedProduct: {
+        productId: product.id,
+        manufacturer: product.manufacturer,
+        productLine: product.productLine,
+        esrNumber: product.esrNumber,
+        Np_cracked: cap?.Np_cracked,
+        Np_uncracked: cap?.Np_uncracked,
+        tau_cr_cracked: cap?.tau_cr_cracked,
+        tau_cr_uncracked: cap?.tau_cr_uncracked,
+        minEdgeDistance: cap?.minEdgeDistance,
+        minSpacing: cap?.minSpacing,
+        criticalEdgeDistance: cap?.criticalEdgeDistance,
+      },
+    });
+  };
+
+  return (
+    <div className="space-y-2">
+      <select
+        value={selectedProductId}
+        onChange={(e) => handleProductChange(e.target.value)}
+        className="w-full px-3 py-1.5 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+      >
+        <option value="">— No product selected (generic ACI formulas) —</option>
+        {filteredProducts.map(p => (
+          <option key={p.id} value={p.id}>
+            {p.manufacturer} {p.productLine} ({p.esrNumber}) — {p.type}
+          </option>
+        ))}
+      </select>
+      {config.selectedProduct && (
+        <div className="text-xs text-muted-foreground bg-background rounded-lg p-2 border border-border">
+          <p className="font-medium">{config.selectedProduct.manufacturer} {config.selectedProduct.productLine}</p>
+          <p>ICC-ES: {config.selectedProduct.esrNumber}</p>
+          {config.selectedProduct.minEdgeDistance && (
+            <p>Min edge: {config.selectedProduct.minEdgeDistance}" | Min spacing: {config.selectedProduct.minSpacing}"</p>
+          )}
+          {config.selectedProduct.tau_cr_cracked && (
+            <p>Bond stress (cracked): {config.selectedProduct.tau_cr_cracked} psi</p>
+          )}
+        </div>
+      )}
     </div>
   );
 }

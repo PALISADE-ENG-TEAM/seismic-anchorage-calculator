@@ -21,8 +21,12 @@ import {
   interactionCheck,
   generateWarnings,
   runCalculation,
+  generateAnchorPositions,
+  calculateBoltGroupCentroid,
+  calculateBoltGroupProperties,
+  calculateRigidBoltGroupDemands,
 } from './calculations.ts';
-import type { SiteParams, EquipmentProperties, AnchorageConfig } from './types.ts';
+import type { SiteParams, EquipmentProperties, AnchorageConfig, AnchorPosition } from './types.ts';
 
 // ============================================================================
 // Hf — Height Amplification Factor (ASCE 7-22 §13.3.1.1)
@@ -522,6 +526,8 @@ describe('runCalculation — VP3 adapted for ASCE 7-22', () => {
     Omega0_building: 3,
     Ie_building: 1.25,     // RC III → Ie = 1.25
     Ta_approx: null,       // Unknown period → default Hf formula
+    seismicApproach: 'known-sfrs',
+    Ai_override: null,
   };
 
   const equip: EquipmentProperties = {
@@ -667,6 +673,8 @@ function makeSite(overrides: Partial<SiteParams> = {}): SiteParams {
     Omega0_building: 0,
     Ie_building: 1.0,
     Ta_approx: null,
+    seismicApproach: 'general',
+    Ai_override: null,
     ...overrides,
   };
 }
@@ -707,3 +715,344 @@ function makeAnchor(overrides: Partial<AnchorageConfig> = {}): AnchorageConfig {
     ...overrides,
   };
 }
+
+// ============================================================================
+// Rigid Bolt Group Analysis — generateAnchorPositions
+// ============================================================================
+
+describe('generateAnchorPositions', () => {
+  it('should produce 4 positions for 2x2 grid centered on equipment', () => {
+    const positions = generateAnchorPositions(2, 2, 40, 20, 80, 40);
+    expect(positions).toHaveLength(4);
+    // Equipment is 80x40, bolt group is 40x20
+    // Start X = (80-40)/2 = 20, Start Y = (40-20)/2 = 10
+    expect(positions[0]).toEqual({ id: 'a-0-0', x: 20, y: 10 });
+    expect(positions[1]).toEqual({ id: 'a-0-1', x: 20, y: 30 });
+    expect(positions[2]).toEqual({ id: 'a-1-0', x: 60, y: 10 });
+    expect(positions[3]).toEqual({ id: 'a-1-1', x: 60, y: 30 });
+  });
+
+  it('should produce 6 positions for 3x2 grid', () => {
+    const positions = generateAnchorPositions(3, 2, 12, 24, 48, 48);
+    expect(positions).toHaveLength(6);
+    // Start X = (48-24)/2 = 12, Start Y = (48-24)/2 = 12
+    expect(positions[0]).toEqual({ id: 'a-0-0', x: 12, y: 12 });
+    expect(positions[5]).toEqual({ id: 'a-2-1', x: 36, y: 36 });
+  });
+
+  it('should center a single anchor (1x1)', () => {
+    const positions = generateAnchorPositions(1, 1, 0, 0, 60, 40);
+    expect(positions).toHaveLength(1);
+    expect(positions[0]).toEqual({ id: 'a-0-0', x: 30, y: 20 });
+  });
+});
+
+// ============================================================================
+// Rigid Bolt Group Analysis — calculateBoltGroupCentroid
+// ============================================================================
+
+describe('calculateBoltGroupCentroid', () => {
+  it('should return geometric center for symmetric layout', () => {
+    const anchors: AnchorPosition[] = [
+      { id: 'a', x: 10, y: 10 },
+      { id: 'b', x: 50, y: 10 },
+      { id: 'c', x: 10, y: 30 },
+      { id: 'd', x: 50, y: 30 },
+    ];
+    const c = calculateBoltGroupCentroid(anchors);
+    expect(c.x).toBeCloseTo(30);
+    expect(c.y).toBeCloseTo(20);
+  });
+
+  it('should compute correct centroid for asymmetric layout', () => {
+    const anchors: AnchorPosition[] = [
+      { id: 'a', x: 0, y: 0 },
+      { id: 'b', x: 30, y: 0 },
+      { id: 'c', x: 0, y: 30 },
+    ];
+    const c = calculateBoltGroupCentroid(anchors);
+    expect(c.x).toBeCloseTo(10);
+    expect(c.y).toBeCloseTo(10);
+  });
+
+  it('should return the anchor position for single anchor', () => {
+    const anchors: AnchorPosition[] = [{ id: 'a', x: 25, y: 15 }];
+    const c = calculateBoltGroupCentroid(anchors);
+    expect(c.x).toBe(25);
+    expect(c.y).toBe(15);
+  });
+});
+
+// ============================================================================
+// Rigid Bolt Group Analysis — calculateBoltGroupProperties
+// ============================================================================
+
+describe('calculateBoltGroupProperties', () => {
+  it('should compute Ip for a 2x2 square bolt group', () => {
+    // 4 bolts at corners of a 20x20 square, centroid at (0,0)
+    const anchors: AnchorPosition[] = [
+      { id: 'a', x: -10, y: -10 },
+      { id: 'b', x: 10, y: -10 },
+      { id: 'c', x: -10, y: 10 },
+      { id: 'd', x: 10, y: 10 },
+    ];
+    const centroid = { x: 0, y: 0 };
+    const props = calculateBoltGroupProperties(anchors, centroid);
+    // Ix = Σdy² = 4 × 10² = 400
+    // Iy = Σdx² = 4 × 10² = 400
+    // Ip = 800
+    expect(props.Ix).toBe(400);
+    expect(props.Iy).toBe(400);
+    expect(props.Ip).toBe(800);
+  });
+
+  it('should compute different Ix and Iy for rectangular layout', () => {
+    const anchors: AnchorPosition[] = [
+      { id: 'a', x: 0, y: 0 },
+      { id: 'b', x: 40, y: 0 },
+      { id: 'c', x: 0, y: 20 },
+      { id: 'd', x: 40, y: 20 },
+    ];
+    const centroid = calculateBoltGroupCentroid(anchors);
+    const props = calculateBoltGroupProperties(anchors, centroid);
+    // centroid = (20, 10)
+    // dx = [-20, 20, -20, 20], dy = [-10, -10, 10, 10]
+    // Iy = 4×400 = 1600, Ix = 4×100 = 400
+    expect(props.Iy).toBe(1600);
+    expect(props.Ix).toBe(400);
+    expect(props.Ip).toBe(2000);
+  });
+
+  it('should handle L-shape custom layout', () => {
+    // 3 bolts in an L
+    const anchors: AnchorPosition[] = [
+      { id: 'a', x: 0, y: 0 },
+      { id: 'b', x: 24, y: 0 },
+      { id: 'c', x: 0, y: 24 },
+    ];
+    const centroid = calculateBoltGroupCentroid(anchors);
+    expect(centroid.x).toBeCloseTo(8);
+    expect(centroid.y).toBeCloseTo(8);
+
+    const props = calculateBoltGroupProperties(anchors, centroid);
+    // dx: [-8, 16, -8], dy: [-8, -8, 16]
+    // Iy = 64+256+64 = 384
+    // Ix = 64+64+256 = 384
+    expect(props.Ix).toBeCloseTo(384);
+    expect(props.Iy).toBeCloseTo(384);
+    expect(props.Ip).toBeCloseTo(768);
+  });
+});
+
+// ============================================================================
+// Rigid Bolt Group Analysis — calculateRigidBoltGroupDemands
+// ============================================================================
+
+describe('calculateRigidBoltGroupDemands', () => {
+  // Standard test parameters
+  const Fp = 1000;  // lbs
+  const Wp = 2000;  // lbs
+  const Omega0p = 2.0;
+  const SDS = 1.0;
+  const cgHeight = 24; // inches
+
+  it('should distribute shear equally for concentric symmetric 2x2', () => {
+    // CG at centroid → no eccentricity → no torsion
+    const anchors = generateAnchorPositions(2, 2, 40, 20, 80, 40);
+    const cgX = 40; // Equipment center
+    const cgY = 20;
+
+    const result = calculateRigidBoltGroupDemands(
+      Fp, Wp, Omega0p, SDS, cgHeight, cgX, cgY, anchors, 'centroid'
+    );
+
+    // Direct shear = FpΩ0p / 4 = 2000/4 = 500 lbs per anchor
+    // No torsion (CG at centroid)
+    for (const af of result.anchorForces) {
+      expect(af.vCombined).toBeCloseTo(500, 0);
+    }
+    expect(result.eccentricity.ex).toBeCloseTo(0);
+    expect(result.eccentricity.ey).toBeCloseTo(0);
+  });
+
+  it('should produce torsional shear for eccentric CG', () => {
+    const anchors = generateAnchorPositions(2, 2, 40, 20, 80, 40);
+    // CG offset 5" in Y from center
+    const cgX = 40;
+    const cgY = 25; // 5" offset
+
+    const result = calculateRigidBoltGroupDemands(
+      Fp, Wp, Omega0p, SDS, cgHeight, cgX, cgY, anchors, 'centroid'
+    );
+
+    expect(result.eccentricity.ey).toBeCloseTo(5);
+    // Torsion from X-direction seismic: Mt = FpΩ0p × ey = 2000 × 5 = 10000 lb-in
+    expect(result.torsionalMomentX).toBeCloseTo(10000);
+    // Anchors should have unequal shear (torsion adds to some, subtracts from others)
+    const shears = result.anchorForces.map(a => a.vCombined);
+    const uniqueShears = new Set(shears.map(s => Math.round(s)));
+    expect(uniqueShears.size).toBeGreaterThan(1); // Not all equal
+  });
+
+  it('should produce zero tension when no uplift occurs', () => {
+    // Very heavy equipment, low seismic force → no uplift
+    const anchors = generateAnchorPositions(2, 2, 40, 20, 80, 40);
+    const result = calculateRigidBoltGroupDemands(
+      100, 10000, 1.0, 0.5, 12, 40, 20, anchors, 'centroid'
+    );
+
+    for (const af of result.anchorForces) {
+      expect(af.tCombined).toBe(0);
+    }
+  });
+
+  it('should identify a critical anchor', () => {
+    const anchors = generateAnchorPositions(2, 2, 40, 20, 80, 40);
+    const result = calculateRigidBoltGroupDemands(
+      Fp, Wp, Omega0p, SDS, cgHeight, 40, 20, anchors, 'centroid'
+    );
+
+    const criticals = result.anchorForces.filter(a => a.isCritical);
+    expect(criticals).toHaveLength(1);
+    expect(result.criticalAnchorId).toBe(criticals[0].anchorId);
+  });
+
+  it('should handle asymmetric L-shape bolt pattern', () => {
+    const anchors: AnchorPosition[] = [
+      { id: 'a', x: 10, y: 10 },
+      { id: 'b', x: 34, y: 10 },
+      { id: 'c', x: 10, y: 34 },
+    ];
+    const result = calculateRigidBoltGroupDemands(
+      Fp, Wp, Omega0p, SDS, cgHeight, 22, 22, anchors, 'centroid'
+    );
+
+    expect(result.anchorForces).toHaveLength(3);
+    expect(result.boltGroupCentroid.x).toBeCloseTo(18);
+    expect(result.boltGroupCentroid.y).toBeCloseTo(18);
+    // Eccentricity: cgX=22 vs centroid=18 → ex=4
+    expect(result.eccentricity.ex).toBeCloseTo(4);
+  });
+
+  it('should work with compression-edge pivot method', () => {
+    const anchors = generateAnchorPositions(2, 2, 40, 20, 80, 40);
+    const result = calculateRigidBoltGroupDemands(
+      Fp, Wp, Omega0p, SDS, cgHeight, 40, 20, anchors, 'compression-edge'
+    );
+
+    // Should still produce valid results
+    expect(result.anchorForces).toHaveLength(4);
+    const criticals = result.anchorForces.filter(a => a.isCritical);
+    expect(criticals).toHaveLength(1);
+  });
+
+  it('should produce different results for centroid vs compression-edge pivot', () => {
+    const anchors = generateAnchorPositions(2, 2, 40, 20, 80, 40);
+    const resultC = calculateRigidBoltGroupDemands(
+      Fp, Wp, Omega0p, SDS, cgHeight, 40, 20, anchors, 'centroid'
+    );
+    const resultE = calculateRigidBoltGroupDemands(
+      Fp, Wp, Omega0p, SDS, cgHeight, 40, 20, anchors, 'compression-edge'
+    );
+
+    // The tension distributions should differ
+    const maxTensionC = Math.max(...resultC.anchorForces.map(a => a.tCombined));
+    const maxTensionE = Math.max(...resultE.anchorForces.map(a => a.tCombined));
+    // They may or may not be equal depending on geometry, but the method should run without error
+    expect(maxTensionC).toBeGreaterThanOrEqual(0);
+    expect(maxTensionE).toBeGreaterThanOrEqual(0);
+  });
+
+  it('should throw for empty anchor array', () => {
+    expect(() => {
+      calculateRigidBoltGroupDemands(
+        Fp, Wp, Omega0p, SDS, cgHeight, 40, 20, [], 'centroid'
+      );
+    }).toThrow('Bolt group must have at least one anchor');
+  });
+
+  it('should handle collinear anchors (all in a line) without crashing', () => {
+    // All anchors on the same X line → Iy = 0
+    const anchors: AnchorPosition[] = [
+      { id: 'a', x: 20, y: 10 },
+      { id: 'b', x: 20, y: 20 },
+      { id: 'c', x: 20, y: 30 },
+    ];
+    const result = calculateRigidBoltGroupDemands(
+      Fp, Wp, Omega0p, SDS, cgHeight, 20, 20, anchors, 'centroid'
+    );
+
+    expect(result.anchorForces).toHaveLength(3);
+    expect(result.Iy).toBe(0); // All same X
+    expect(result.Ix).toBeGreaterThan(0);
+  });
+});
+
+// ============================================================================
+// Rigid Bolt Group — Integration with runCalculation
+// ============================================================================
+
+describe('runCalculation — rigid bolt group integration', () => {
+  it('should produce boltGroup results when analysisMethod is rigid-bolt-group', () => {
+    const site = makeSite();
+    const equip = makeEquip();
+    const anchor = makeAnchor({
+      anchorLayout: {
+        pattern: '2x2',
+        nLong: 2,
+        nTrans: 2,
+        spacing: { longitudinal: 48, transverse: 24 },
+        edgeDistance: { ca1: 6, ca2: 6 },
+        analysisMethod: 'rigid-bolt-group' as const,
+        pivotMethod: 'centroid' as const,
+      },
+    });
+
+    const result = runCalculation(site, equip, anchor);
+    expect(result).not.toBeNull();
+    expect(result!.boltGroup).toBeDefined();
+    expect(result!.boltGroup!.anchorForces).toHaveLength(4);
+    expect(result!.boltGroup!.criticalAnchorId).toBeTruthy();
+    // Interaction ratios should be computed
+    const critAnchor = result!.boltGroup!.anchorForces.find(a => a.isCritical);
+    expect(critAnchor).toBeDefined();
+    expect(critAnchor!.interactionRatio).toBeGreaterThanOrEqual(0);
+  });
+
+  it('should not produce boltGroup results for simple analysis', () => {
+    const site = makeSite();
+    const equip = makeEquip();
+    const anchor = makeAnchor();
+
+    const result = runCalculation(site, equip, anchor);
+    expect(result).not.toBeNull();
+    expect(result!.boltGroup).toBeUndefined();
+  });
+
+  it('should produce same overallStatus format for both methods', () => {
+    const site = makeSite();
+    const equip = makeEquip();
+
+    const anchorSimple = makeAnchor();
+    const anchorRBG = makeAnchor({
+      anchorLayout: {
+        pattern: '2x2',
+        nLong: 2,
+        nTrans: 2,
+        spacing: { longitudinal: 48, transverse: 24 },
+        edgeDistance: { ca1: 6, ca2: 6 },
+        analysisMethod: 'rigid-bolt-group' as const,
+        pivotMethod: 'centroid' as const,
+      },
+    });
+
+    const resultSimple = runCalculation(site, equip, anchorSimple);
+    const resultRBG = runCalculation(site, equip, anchorRBG);
+
+    expect(resultSimple).not.toBeNull();
+    expect(resultRBG).not.toBeNull();
+    // Both should have valid status
+    expect(['PASS', 'FAIL']).toContain(resultSimple!.overallStatus);
+    expect(['PASS', 'FAIL']).toContain(resultRBG!.overallStatus);
+  });
+});

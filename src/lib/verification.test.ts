@@ -19,17 +19,8 @@ import {
   getCAR,
   calculateFp,
   calculateOverturning,
-  calculateAnchorDemands,
-  steelTensionCapacity,
-  steelShearCapacity,
-  concreteBreakoutTensionCapacity,
-  concreteBreakoutShearCapacity,
-  concretePryoutCapacity,
-  pulloutCapacity,
   sideFaceBlowoutCapacity,
   adhesiveBondCapacity,
-  interactionCheck,
-  generateWarnings,
   runCalculation,
 } from './calculations.ts';
 import type { SiteParams, EquipmentProperties, AnchorageConfig } from './types.ts';
@@ -136,6 +127,8 @@ describe('VP4: Post-installed expansion, edge condition', () => {
     Omega0_building: 2.5,
     Ie_building: 1.0,
     Ta_approx: null,
+    seismicApproach: 'known-sfrs',
+    Ai_override: null,
   };
 
   const equip: EquipmentProperties = {
@@ -355,6 +348,8 @@ describe('VP5: Post-installed adhesive, high seismic (grade level)', () => {
     Omega0_building: 0,
     Ie_building: 1.0,
     Ta_approx: null,
+    seismicApproach: 'general',
+    Ai_override: null,
   };
 
   const equip: EquipmentProperties = {
@@ -537,6 +532,8 @@ describe('VP6: Side-face blowout condition', () => {
     Omega0_building: 0,
     Ie_building: 1.0,
     Ta_approx: null,
+    seismicApproach: 'general',
+    Ai_override: null,
   };
 
   const equip: EquipmentProperties = {
@@ -713,6 +710,8 @@ describe('VP7: Close spacing, high seismic RTU', () => {
     Omega0_building: 3,
     Ie_building: 1.0,
     Ta_approx: null,
+    seismicApproach: 'known-sfrs',
+    Ai_override: null,
   };
 
   const equip: EquipmentProperties = {
@@ -858,6 +857,8 @@ describe('Regression: VP1-VP3 still valid', () => {
       Omega0_building: 0,
       Ie_building: 1.0,
       Ta_approx: null,
+      seismicApproach: 'general',
+      Ai_override: null,
     };
 
     const equip: EquipmentProperties = {
@@ -923,6 +924,8 @@ describe('Regression: VP1-VP3 still valid', () => {
       Omega0_building: 3,
       Ie_building: 1.25,
       Ta_approx: null,
+      seismicApproach: 'known-sfrs',
+      Ai_override: null,
     };
 
     const equip: EquipmentProperties = {
