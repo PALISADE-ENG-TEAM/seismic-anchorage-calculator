@@ -170,6 +170,11 @@ export function ResultsTab({
               Vu={results.vuPerAnchor}
               governingDirection={results.governingDirection}
               upliftOccurs={results.upliftOccurs}
+              cgOffsetX={
+                results.governingDirection === 'longitudinal'
+                  ? (equipProps.cgOffsetX ?? 0)
+                  : (equipProps.cgOffsetY ?? 0)
+              }
             />
           </Section>
           <Section title="Anchor Layout Detail">
@@ -186,9 +191,116 @@ export function ResultsTab({
               Vu={results.vuPerAnchor}
               governingDirection={results.governingDirection}
               upliftOccurs={results.upliftOccurs}
+              anchorForces={results.boltGroup?.anchorForces}
             />
           </Section>
         </div>
+      )}
+
+      {/* Bolt Group Analysis Results (RBG only) */}
+      {results.boltGroup && (
+        <>
+          <Section title="Bolt Group Analysis">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <ValueCard
+                label="Centroid X"
+                value={results.boltGroup.boltGroupCentroid.x.toFixed(1)}
+                unit="in"
+                sub="Bolt group"
+              />
+              <ValueCard
+                label="Centroid Y"
+                value={results.boltGroup.boltGroupCentroid.y.toFixed(1)}
+                unit="in"
+                sub="Bolt group"
+              />
+              <ValueCard
+                label="Eccentricity ex"
+                value={results.boltGroup.eccentricity.ex.toFixed(2)}
+                unit="in"
+                sub="CG offset (long.)"
+                highlight={Math.abs(results.boltGroup.eccentricity.ex) > 0.01}
+              />
+              <ValueCard
+                label="Eccentricity ey"
+                value={results.boltGroup.eccentricity.ey.toFixed(2)}
+                unit="in"
+                sub="CG offset (trans.)"
+                highlight={Math.abs(results.boltGroup.eccentricity.ey) > 0.01}
+              />
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-4">
+              <ValueCard label="Ix" value={results.boltGroup.Ix.toFixed(1)} unit="in\u00B2" sub="About X-axis" />
+              <ValueCard label="Iy" value={results.boltGroup.Iy.toFixed(1)} unit="in\u00B2" sub="About Y-axis" />
+              <ValueCard label="Ip" value={results.boltGroup.Ip.toFixed(1)} unit="in\u00B2" sub="Polar moment" highlight />
+            </div>
+          </Section>
+
+          <Section title="Per-Anchor Forces">
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-border text-muted-foreground text-left">
+                    <th className="py-1.5 pr-2">Anchor</th>
+                    <th className="py-1.5 pr-2 text-right font-mono">X (in)</th>
+                    <th className="py-1.5 pr-2 text-right font-mono">Y (in)</th>
+                    <th className="py-1.5 pr-2 text-right font-mono">V_direct</th>
+                    <th className="py-1.5 pr-2 text-right font-mono">V_torsion</th>
+                    <th className="py-1.5 pr-2 text-right font-mono">V_combined</th>
+                    <th className="py-1.5 pr-2 text-right font-mono">T_combined</th>
+                    <th className="py-1.5 pr-2 text-right font-mono">IR</th>
+                    <th className="py-1.5 text-center">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {results.boltGroup.anchorForces.map((af) => {
+                    const vDirect = Math.sqrt(af.vDirectX ** 2 + af.vDirectY ** 2);
+                    const vTorsion = Math.sqrt(af.vTorsionX ** 2 + af.vTorsionY ** 2);
+                    return (
+                      <tr
+                        key={af.anchorId}
+                        className={`border-b border-border/50 ${
+                          af.isCritical ? 'bg-fail/10 font-semibold' : ''
+                        }`}
+                      >
+                        <td className="py-1.5 pr-2 font-mono">
+                          {af.anchorId}
+                          {af.isCritical && (
+                            <span className="ml-1 text-[10px] text-fail font-bold">CRIT</span>
+                          )}
+                        </td>
+                        <td className="py-1.5 pr-2 text-right font-mono">{af.position.x.toFixed(1)}</td>
+                        <td className="py-1.5 pr-2 text-right font-mono">{af.position.y.toFixed(1)}</td>
+                        <td className="py-1.5 pr-2 text-right font-mono">{fmt(vDirect)}</td>
+                        <td className="py-1.5 pr-2 text-right font-mono">{fmt(vTorsion)}</td>
+                        <td className="py-1.5 pr-2 text-right font-mono font-medium">{fmt(af.vCombined)}</td>
+                        <td className="py-1.5 pr-2 text-right font-mono font-medium">{fmt(af.tCombined)}</td>
+                        <td className="py-1.5 pr-2 text-right font-mono">
+                          {(af.interactionRatio * 100).toFixed(1)}%
+                        </td>
+                        <td className="py-1.5 text-center">
+                          <span
+                            className={`inline-block px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
+                              af.interactionRatio <= 1.0
+                                ? 'bg-pass/20 text-pass'
+                                : 'bg-fail/20 text-fail'
+                            }`}
+                          >
+                            {af.interactionRatio <= 1.0 ? 'OK' : 'NG'}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <p className="text-xs text-muted-foreground mt-2 italic">
+              Positions relative to bolt group centroid. IR = Interaction Ratio per ACI 318-19 Eq. 17.8.3.
+              Critical anchor (CRIT) governs design.
+            </p>
+          </Section>
+        </>
       )}
 
       {/* Individual Load Case Reactions */}

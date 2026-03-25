@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import type { AnchorageConfig, AnchorType, AnchorMaterial } from '@/lib/types.ts';
+import type { AnchorageConfig, AnchorType, AnchorMaterial, AnchorPosition, AnalysisMethod } from '@/lib/types.ts';
 import { ANCHOR_STEEL_PROPERTIES, CONCRETE_STRENGTHS } from '@/lib/constants.ts';
 import { ANCHOR_PRODUCTS, getProductCapacity } from '@/lib/anchor-products.ts';
 import { AnchorDiagram } from '@/components/diagrams/AnchorDiagram.tsx';
+import { generateAnchorPositions } from '@/lib/calculations.ts';
 
 const ANCHOR_TYPES: { value: AnchorType; label: string }[] = [
   { value: 'cast-in', label: 'Cast-in-Place' },
@@ -33,9 +34,92 @@ export function AnchorageTab({
   equipLength: number;
   equipWidth: number;
 }) {
+  const isRBG = config.anchorLayout.analysisMethod === 'rigid-bolt-group';
+
   const handlePatternChange = (pattern: string) => {
     const [nL, nT] = pattern.split('x').map(Number);
-    onLayoutChange({ pattern, nLong: nL, nTrans: nT });
+    if (isRBG) {
+      // In RBG mode, also generate anchor positions from the pattern
+      const positions = generateAnchorPositions(
+        nL, nT,
+        config.anchorLayout.spacing.longitudinal,
+        config.anchorLayout.spacing.transverse,
+        equipLength, equipWidth
+      );
+      onLayoutChange({ pattern, nLong: nL, nTrans: nT, anchors: positions });
+    } else {
+      onLayoutChange({ pattern, nLong: nL, nTrans: nT });
+    }
+  };
+
+  const handleAnalysisMethodChange = (method: AnalysisMethod) => {
+    if (method === 'rigid-bolt-group' && !config.anchorLayout.anchors) {
+      // Generate initial positions from current grid params
+      const positions = generateAnchorPositions(
+        config.anchorLayout.nLong,
+        config.anchorLayout.nTrans,
+        config.anchorLayout.spacing.longitudinal,
+        config.anchorLayout.spacing.transverse,
+        equipLength, equipWidth
+      );
+      onLayoutChange({ analysisMethod: method, anchors: positions, pivotMethod: 'centroid' });
+    } else {
+      onLayoutChange({ analysisMethod: method });
+    }
+  };
+
+  const handleSpacingChange = (key: 'longitudinal' | 'transverse', v: number) => {
+    const newSpacing = { ...config.anchorLayout.spacing, [key]: v };
+    if (isRBG) {
+      // Regenerate positions when spacing changes in RBG mode
+      const positions = generateAnchorPositions(
+        config.anchorLayout.nLong,
+        config.anchorLayout.nTrans,
+        newSpacing.longitudinal,
+        newSpacing.transverse,
+        equipLength, equipWidth
+      );
+      onLayoutChange({ spacing: newSpacing, anchors: positions });
+    } else {
+      onLayoutChange({ spacing: newSpacing });
+    }
+  };
+
+  const handleAnchorPositionChange = (id: string, field: 'x' | 'y', value: number) => {
+    const anchors = (config.anchorLayout.anchors ?? []).map(a =>
+      a.id === id ? { ...a, [field]: value } : a
+    );
+    onLayoutChange({ anchors });
+  };
+
+  const handleAddAnchor = () => {
+    const anchors = config.anchorLayout.anchors ?? [];
+    const newId = `a-custom-${Date.now()}`;
+    // Place near center of equipment
+    const newAnchor: AnchorPosition = {
+      id: newId,
+      x: equipLength / 2,
+      y: equipWidth / 2,
+    };
+    onLayoutChange({ anchors: [...anchors, newAnchor], pattern: 'custom' });
+  };
+
+  const handleRemoveAnchor = (id: string) => {
+    const anchors = (config.anchorLayout.anchors ?? []).filter(a => a.id !== id);
+    onLayoutChange({ anchors, pattern: 'custom' });
+  };
+
+  const handleDiagramClick = (x: number, y: number) => {
+    if (!isRBG) return;
+    // Snap to 0.5" grid
+    const snappedX = Math.round(x * 2) / 2;
+    const snappedY = Math.round(y * 2) / 2;
+    const anchors = config.anchorLayout.anchors ?? [];
+    const newId = `a-click-${Date.now()}`;
+    onLayoutChange({
+      anchors: [...anchors, { id: newId, x: snappedX, y: snappedY }],
+      pattern: 'custom',
+    });
   };
 
   return (
@@ -142,9 +226,60 @@ export function AnchorageTab({
           <legend className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
             Anchor Layout
           </legend>
+
+          {/* Analysis Method Toggle */}
+          <div className="flex gap-1 p-1 bg-background border border-border rounded-lg">
+            <button
+              onClick={() => handleAnalysisMethodChange('simple')}
+              className={`flex-1 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                !isRBG
+                  ? 'bg-primary text-primary-foreground'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              Simple
+            </button>
+            <button
+              onClick={() => handleAnalysisMethodChange('rigid-bolt-group')}
+              className={`flex-1 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                isRBG
+                  ? 'bg-primary text-primary-foreground'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              Rigid Bolt Group
+            </button>
+          </div>
+
+          {/* Pivot Method (RBG only) */}
+          {isRBG && (
+            <div className="flex gap-1 p-1 bg-background border border-border rounded-lg">
+              <button
+                onClick={() => onLayoutChange({ pivotMethod: 'centroid' })}
+                className={`flex-1 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                  (config.anchorLayout.pivotMethod ?? 'centroid') === 'centroid'
+                    ? 'bg-secondary text-secondary-foreground'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                Pivot: Centroid
+              </button>
+              <button
+                onClick={() => onLayoutChange({ pivotMethod: 'compression-edge' })}
+                className={`flex-1 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                  config.anchorLayout.pivotMethod === 'compression-edge'
+                    ? 'bg-secondary text-secondary-foreground'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                Pivot: Compression Edge
+              </button>
+            </div>
+          )}
+
           <div className="grid grid-cols-3 gap-3">
             <label className="block">
-              <span className="text-xs text-muted-foreground">Pattern</span>
+              <span className="text-xs text-muted-foreground">Pattern {isRBG ? '(Preset)' : ''}</span>
               <select
                 value={config.anchorLayout.pattern}
                 onChange={(e) => handlePatternChange(e.target.value)}
@@ -153,6 +288,9 @@ export function AnchorageTab({
                 {PATTERNS.map((p) => (
                   <option key={p} value={p}>{p} ({p.split('x').map(Number).reduce((a, b) => a * b)} anchors)</option>
                 ))}
+                {config.anchorLayout.pattern === 'custom' && (
+                  <option value="custom">Custom</option>
+                )}
               </select>
             </label>
             <NumField
@@ -170,16 +308,12 @@ export function AnchorageTab({
             <NumField
               label="Long. Spacing, sx (in)"
               value={config.anchorLayout.spacing.longitudinal}
-              onChange={(v) =>
-                onLayoutChange({ spacing: { ...config.anchorLayout.spacing, longitudinal: v } })
-              }
+              onChange={(v) => handleSpacingChange('longitudinal', v)}
             />
             <NumField
               label="Trans. Spacing, sy (in)"
               value={config.anchorLayout.spacing.transverse}
-              onChange={(v) =>
-                onLayoutChange({ spacing: { ...config.anchorLayout.spacing, transverse: v } })
-              }
+              onChange={(v) => handleSpacingChange('transverse', v)}
             />
           </div>
           <div className="grid grid-cols-2 gap-3">
@@ -198,9 +332,78 @@ export function AnchorageTab({
               }
             />
           </div>
-          <p className="text-xs text-muted-foreground italic">
-            Total anchors: {config.anchorLayout.nLong * config.anchorLayout.nTrans}
-          </p>
+
+          {/* Anchor Coordinate Table (RBG only) */}
+          {isRBG && config.anchorLayout.anchors && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-muted-foreground uppercase">
+                  Anchor Coordinates ({config.anchorLayout.anchors.length} bolts)
+                </span>
+                <button
+                  onClick={handleAddAnchor}
+                  className="px-2 py-1 text-xs rounded bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+                >
+                  + Add Anchor
+                </button>
+              </div>
+              <div className="max-h-48 overflow-y-auto border border-border rounded-lg">
+                <table className="w-full text-xs">
+                  <thead className="bg-background sticky top-0">
+                    <tr className="border-b border-border">
+                      <th className="py-1 px-2 text-left text-muted-foreground">ID</th>
+                      <th className="py-1 px-2 text-right text-muted-foreground">X (in)</th>
+                      <th className="py-1 px-2 text-right text-muted-foreground">Y (in)</th>
+                      <th className="py-1 px-2 w-8"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {config.anchorLayout.anchors.map((a) => (
+                      <tr key={a.id} className="border-b border-border/50 hover:bg-primary/5">
+                        <td className="py-1 px-2 font-mono text-muted-foreground">{a.id}</td>
+                        <td className="py-1 px-2">
+                          <input
+                            type="number"
+                            value={a.x}
+                            onChange={(e) => handleAnchorPositionChange(a.id, 'x', parseFloat(e.target.value) || 0)}
+                            step={0.5}
+                            className="w-full text-right font-mono px-1 py-0.5 bg-background border border-border rounded text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+                          />
+                        </td>
+                        <td className="py-1 px-2">
+                          <input
+                            type="number"
+                            value={a.y}
+                            onChange={(e) => handleAnchorPositionChange(a.id, 'y', parseFloat(e.target.value) || 0)}
+                            step={0.5}
+                            className="w-full text-right font-mono px-1 py-0.5 bg-background border border-border rounded text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+                          />
+                        </td>
+                        <td className="py-1 px-2 text-center">
+                          <button
+                            onClick={() => handleRemoveAnchor(a.id)}
+                            className="text-fail hover:text-fail/70 font-bold"
+                            title="Remove anchor"
+                          >
+                            ×
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p className="text-xs text-muted-foreground italic">
+                Click on the diagram to add anchors. Origin (0,0) = bottom-left corner of equipment.
+              </p>
+            </div>
+          )}
+
+          {!isRBG && (
+            <p className="text-xs text-muted-foreground italic">
+              Total anchors: {config.anchorLayout.nLong * config.anchorLayout.nTrans}
+            </p>
+          )}
         </fieldset>
       </div>
 
@@ -213,6 +416,9 @@ export function AnchorageTab({
           sy={config.anchorLayout.spacing.transverse}
           equipLength={equipLength}
           equipWidth={equipWidth}
+          anchors={isRBG ? config.anchorLayout.anchors : undefined}
+          interactive={isRBG}
+          onAnchorClick={isRBG ? handleDiagramClick : undefined}
         />
       </div>
     </div>

@@ -37,14 +37,34 @@ export function deleteProject(id: string): void {
   localStorage.setItem(CALCULATIONS_KEY, JSON.stringify(calcs));
 }
 
+// --- Migration ---
+
+/**
+ * Migrate old calculation data to support new rigid bolt group fields.
+ * Fills in defaults for missing optional fields (backwards compatible).
+ */
+function migrateCalculation(calc: Calculation): Calculation {
+  const layout = calc.anchorageConfig?.anchorLayout;
+  if (layout && layout.analysisMethod === undefined) {
+    layout.analysisMethod = 'simple';
+  }
+  const equip = calc.equipmentProperties;
+  if (equip && equip.cgOffsetX === undefined) {
+    equip.cgOffsetX = 0;
+    equip.cgOffsetY = 0;
+  }
+  return calc;
+}
+
 // --- Calculations ---
 
 export function getCalculations(projectId?: string): Calculation[] {
   try {
     const raw = localStorage.getItem(CALCULATIONS_KEY);
     const calcs: Calculation[] = raw ? JSON.parse(raw) : [];
-    if (projectId) return calcs.filter((c) => c.projectId === projectId);
-    return calcs;
+    const migrated = calcs.map(migrateCalculation);
+    if (projectId) return migrated.filter((c) => c.projectId === projectId);
+    return migrated;
   } catch {
     return [];
   }

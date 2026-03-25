@@ -7,6 +7,7 @@
 
 import { LOAD_ARROW_COLORS, DRAWING_COLORS } from '@/lib/svg/types'
 import { fmtForce } from '@/lib/svg/format-helpers'
+import type { AnchorForceResult } from '@/lib/types'
 
 // ---------------------------------------------------------------------------
 // Props
@@ -25,6 +26,8 @@ interface AnchorDetailDiagramProps {
   Vu: number             // Shear per anchor (lbs)
   governingDirection: 'longitudinal' | 'transverse'
   upliftOccurs: boolean
+  // Rigid bolt group support
+  anchorForces?: AnchorForceResult[]
 }
 
 // ---------------------------------------------------------------------------
@@ -252,7 +255,9 @@ export function AnchorDetailDiagram({
   Vu,
   governingDirection,
   upliftOccurs,
+  anchorForces,
 }: AnchorDetailDiagramProps) {
+  const hasRBG = anchorForces && anchorForces.length > 0
   // Placeholder state
   if (nLong <= 0 || nTrans <= 0) {
     return (
@@ -427,14 +432,21 @@ export function AnchorDetailDiagram({
       {anchors.map((a, i) => {
         const isTension = upliftOccurs && isTensionAnchor(a.col, a.row, governingDirection)
 
+        // Find matching RBG anchor force (by index, since grid is generated in same order)
+        const af = hasRBG ? anchorForces[i] : undefined
+
+        // Determine max forces for scaling arrows (RBG mode)
+        const maxV = hasRBG ? Math.max(...anchorForces.map(f => f.vCombined), 1) : 1
+        const maxT = hasRBG ? Math.max(...anchorForces.map(f => f.tCombined), 1) : 1
+
         return (
           <g key={`anchor-${i}`}>
-            {/* Bolt circle */}
+            {/* Bolt circle — red outline for critical anchor in RBG mode */}
             <circle
               cx={a.x} cy={a.y} r={boltR}
-              fill={C.object}
-              stroke={C.bg}
-              strokeWidth="1"
+              fill={af?.isCritical ? C.demand : C.object}
+              stroke={af?.isCritical ? C.demand : C.bg}
+              strokeWidth={af?.isCritical ? 2 : 1}
             />
             {/* Inner cross for bolt detail */}
             <line
@@ -448,35 +460,117 @@ export function AnchorDetailDiagram({
               stroke={C.bg} strokeWidth="0.8"
             />
 
-            {/* Tension indicator: green upward triangle */}
-            {isTension && (
-              <SmallArrow
-                x={a.x}
-                y={a.y - boltR - 6}
-                dir="up"
-                color={C.tension}
-                size={4}
-              />
-            )}
-
-            {/* Shear indicator: small red arrow in governing direction */}
-            {Vu > 0 && (
+            {/* === RBG Mode: Per-anchor force vectors === */}
+            {af ? (
               <g>
-                <line
-                  x1={a.x + (shearDir === 'right' ? boltR + 2 : 0)}
-                  y1={a.y + (shearDir === 'down' ? boltR + 2 : 0)}
-                  x2={a.x + (shearDir === 'right' ? boltR + 2 + shearLen : 0)}
-                  y2={a.y + (shearDir === 'down' ? boltR + 2 + shearLen : 0)}
-                  stroke={C.demand}
-                  strokeWidth="1.2"
-                />
-                <SmallArrow
-                  x={a.x + (shearDir === 'right' ? boltR + 2 + shearLen : 0)}
-                  y={a.y + (shearDir === 'down' ? boltR + 2 + shearLen : 0)}
-                  dir={shearDir}
-                  color={C.demand}
-                  size={3}
-                />
+                {/* Shear vector — red arrow proportional to vCombined */}
+                {af.vCombined > 0 && (() => {
+                  const vScale = Math.min(20, 8 + 12 * (af.vCombined / maxV))
+                  // Direction from combined X/Y components
+                  const totalVx = af.vDirectX + af.vTorsionX
+                  const totalVy = af.vDirectY + af.vTorsionY
+                  const vMag = Math.sqrt(totalVx * totalVx + totalVy * totalVy)
+                  if (vMag <= 0) return null
+                  const nx = totalVx / vMag
+                  const ny = totalVy / vMag
+                  const endX = a.x + nx * (boltR + 2 + vScale)
+                  const endY = a.y + ny * (boltR + 2 + vScale)
+                  // Determine closest cardinal direction for arrowhead
+                  const dir: 'up' | 'down' | 'left' | 'right' =
+                    Math.abs(nx) > Math.abs(ny)
+                      ? (nx > 0 ? 'right' : 'left')
+                      : (ny > 0 ? 'down' : 'up')
+                  return (
+                    <g>
+                      <line
+                        x1={a.x + nx * (boltR + 2)} y1={a.y + ny * (boltR + 2)}
+                        x2={endX} y2={endY}
+                        stroke={C.demand} strokeWidth="1.2"
+                      />
+                      <SmallArrow x={endX} y={endY} dir={dir} color={C.demand} size={3} />
+                    </g>
+                  )
+                })()}
+
+                {/* Torsional shear component — lighter tangential arrow */}
+                {(Math.abs(af.vTorsionX) > 0.1 || Math.abs(af.vTorsionY) > 0.1) && (() => {
+                  const tMag = Math.sqrt(af.vTorsionX ** 2 + af.vTorsionY ** 2)
+                  const tScale = Math.min(14, 5 + 9 * (tMag / maxV))
+                  const tnx = af.vTorsionX / tMag
+                  const tny = af.vTorsionY / tMag
+                  const endX = a.x + tnx * (boltR + 2 + tScale)
+                  const endY = a.y + tny * (boltR + 2 + tScale)
+                  return (
+                    <line
+                      x1={a.x + tnx * (boltR + 2)} y1={a.y + tny * (boltR + 2)}
+                      x2={endX} y2={endY}
+                      stroke={C.demand} strokeWidth="0.6" strokeDasharray="2 2" opacity="0.5"
+                    />
+                  )
+                })()}
+
+                {/* Tension indicator — green upward triangle, sized by tCombined */}
+                {af.tCombined > 0 && (() => {
+                  const tSize = Math.min(6, 3 + 3 * (af.tCombined / maxT))
+                  return (
+                    <SmallArrow
+                      x={a.x}
+                      y={a.y - boltR - 4 - tSize}
+                      dir="up"
+                      color={C.tension}
+                      size={tSize}
+                    />
+                  )
+                })()}
+
+                {/* Critical anchor label */}
+                {af.isCritical && (
+                  <text
+                    x={a.x} y={a.y + boltR + 12}
+                    textAnchor="middle"
+                    fill={C.demand}
+                    fontSize="7"
+                    fontFamily="sans-serif"
+                    fontWeight="bold"
+                  >
+                    CRIT
+                  </text>
+                )}
+              </g>
+            ) : (
+              /* === Simple Mode: Original force indicators === */
+              <g>
+                {/* Tension indicator: green upward triangle */}
+                {isTension && (
+                  <SmallArrow
+                    x={a.x}
+                    y={a.y - boltR - 6}
+                    dir="up"
+                    color={C.tension}
+                    size={4}
+                  />
+                )}
+
+                {/* Shear indicator: small red arrow in governing direction */}
+                {Vu > 0 && (
+                  <g>
+                    <line
+                      x1={a.x + (shearDir === 'right' ? boltR + 2 : 0)}
+                      y1={a.y + (shearDir === 'down' ? boltR + 2 : 0)}
+                      x2={a.x + (shearDir === 'right' ? boltR + 2 + shearLen : 0)}
+                      y2={a.y + (shearDir === 'down' ? boltR + 2 + shearLen : 0)}
+                      stroke={C.demand}
+                      strokeWidth="1.2"
+                    />
+                    <SmallArrow
+                      x={a.x + (shearDir === 'right' ? boltR + 2 + shearLen : 0)}
+                      y={a.y + (shearDir === 'down' ? boltR + 2 + shearLen : 0)}
+                      dir={shearDir}
+                      color={C.demand}
+                      size={3}
+                    />
+                  </g>
+                )}
               </g>
             )}
           </g>
@@ -622,9 +716,11 @@ export function AnchorDetailDiagram({
         fontSize="9"
         fontFamily="monospace"
       >
-        Tu = {upliftOccurs ? fmtForce(Tu) : '0 (no uplift)'}
-        {'   |   '}
-        Vu = {fmtForce(Vu)} per anchor
+        {hasRBG ? (
+          <>Critical anchor: Tu = {fmtForce(anchorForces.find(a => a.isCritical)?.tCombined ?? 0)} | Vu = {fmtForce(anchorForces.find(a => a.isCritical)?.vCombined ?? 0)}</>
+        ) : (
+          <>Tu = {upliftOccurs ? fmtForce(Tu) : '0 (no uplift)'}{'   |   '}Vu = {fmtForce(Vu)} per anchor</>
+        )}
       </text>
 
       {/* ---- Legend ---- */}

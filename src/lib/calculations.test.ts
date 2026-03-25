@@ -9,6 +9,8 @@ import {
   calculateRmu,
   getCAR,
   calculateFp,
+  calculateFpFromFloorAccel,
+  checkSDCExemption,
   calculateOverturning,
   steelTensionCapacity,
   steelShearCapacity,
@@ -1054,5 +1056,248 @@ describe('runCalculation — rigid bolt group integration', () => {
     // Both should have valid status
     expect(['PASS', 'FAIL']).toContain(resultSimple!.overallStatus);
     expect(['PASS', 'FAIL']).toContain(resultRBG!.overallStatus);
+  });
+});
+
+// ============================================================================
+// SDC Exemption Check — ASCE 7-22 §13.1.4
+// ============================================================================
+
+describe('checkSDCExemption', () => {
+  it('SDC A: all components exempt (Item 1)', () => {
+    const result = checkSDCExemption('A', 1.0, 50, 100, 500, 'mechanical');
+    expect(result.status).toBe('exempt');
+    expect(result.codeRef).toContain('Item 1');
+  });
+
+  it('SDC A: exempt even with Ip = 1.5', () => {
+    const result = checkSDCExemption('A', 1.5, 50, 100, 500, 'mechanical');
+    expect(result.status).toBe('exempt');
+  });
+
+  it('SDC B: M/E/P with Ip=1.0 below 2/3 height is exempt (Item 2)', () => {
+    // z=30, h=100 → z/h = 0.3 ≤ 2/3
+    const result = checkSDCExemption('B', 1.0, 30, 100, 500, 'mechanical');
+    expect(result.status).toBe('exempt');
+    expect(result.codeRef).toContain('Item 2');
+  });
+
+  it('SDC C: M/E/P with Ip=1.0 above 2/3 height is required', () => {
+    // z=80, h=100 → z/h = 0.8 > 2/3
+    const result = checkSDCExemption('C', 1.0, 80, 100, 500, 'mechanical');
+    expect(result.status).toBe('required');
+  });
+
+  it('SDC B: M/E/P ≤ 20 lbs with Ip=1.0 is exempt (Item 3)', () => {
+    const result = checkSDCExemption('B', 1.0, 80, 100, 15, 'electrical');
+    expect(result.status).toBe('exempt');
+    expect(result.codeRef).toContain('Item 3');
+  });
+
+  it('SDC B: M/E/P with Ip=1.5 is required regardless of position', () => {
+    const result = checkSDCExemption('B', 1.5, 30, 100, 500, 'mechanical');
+    expect(result.status).toBe('required');
+  });
+
+  it('SDC B: architectural with Ip=1.0 is exempt (Item 5)', () => {
+    const result = checkSDCExemption('B', 1.0, 50, 100, 500, 'architectural');
+    expect(result.status).toBe('exempt');
+    expect(result.codeRef).toContain('Item 5');
+  });
+
+  it('SDC C: architectural at grade with Ip=1.0 is exempt (Item 6)', () => {
+    const result = checkSDCExemption('C', 1.0, 0, 100, 500, 'architectural');
+    expect(result.status).toBe('exempt');
+    expect(result.codeRef).toContain('Item 6');
+  });
+
+  it('SDC C: architectural above grade with Ip=1.0 is required', () => {
+    const result = checkSDCExemption('C', 1.0, 50, 100, 500, 'architectural');
+    expect(result.status).toBe('required');
+  });
+
+  it('SDC D: always required', () => {
+    const result = checkSDCExemption('D', 1.0, 0, 100, 10, 'mechanical');
+    expect(result.status).toBe('required');
+  });
+
+  it('SDC E: always required', () => {
+    const result = checkSDCExemption('E', 1.0, 30, 100, 500, 'mechanical');
+    expect(result.status).toBe('required');
+  });
+
+  it('SDC F: always required', () => {
+    const result = checkSDCExemption('F', 1.5, 0, 100, 500, 'electrical');
+    expect(result.status).toBe('required');
+  });
+});
+
+// ============================================================================
+// Floor Acceleration Alternative — ASCE 7-22 §13.3.1.1
+// ============================================================================
+
+describe('calculateFpFromFloorAccel', () => {
+  it('calculates Fp = Ai × (CAR/Rpo) × Ip × Wp', () => {
+    // Ai=0.5g, SDS=1.0, Ip=1.0, Wp=1000, CAR=1.4, Rpo=2.0
+    // Fp = 0.5 × (1.4/2.0) × 1.0 × 1000 = 350
+    const result = calculateFpFromFloorAccel(0.5, 1.0, 1.0, 1000, 1.4, 2.0);
+    expect(result.fpCalculated).toBeCloseTo(350, 1);
+  });
+
+  it('applies Fp_min bound', () => {
+    // Very low Ai → should hit Fp_min = 0.3 × SDS × Ip × Wp
+    const result = calculateFpFromFloorAccel(0.01, 1.0, 1.0, 1000, 1.0, 2.0);
+    expect(result.fpDesign).toBeCloseTo(result.fpMinimum, 1);
+    expect(result.fpMinimum).toBeCloseTo(300, 1); // 0.3 × 1.0 × 1.0 × 1000
+  });
+
+  it('applies Fp_max bound', () => {
+    // Very high Ai → should hit Fp_max = 1.6 × SDS × Ip × Wp
+    const result = calculateFpFromFloorAccel(5.0, 1.0, 1.0, 1000, 1.4, 1.0);
+    expect(result.fpDesign).toBeCloseTo(result.fpMaximum, 1);
+    expect(result.fpMaximum).toBeCloseTo(1600, 1); // 1.6 × 1.0 × 1.0 × 1000
+  });
+});
+
+// ============================================================================
+// Seismic Approach — runCalculation approach-aware behavior
+// ============================================================================
+
+describe('runCalculation — seismic approach', () => {
+  // Base test params
+  const baseSite: SiteParams = {
+    address: 'Test',
+    latitude: 34.05,
+    longitude: -118.25,
+    SDS: 1.1,
+    SD1: 0.6,
+    Ss: 1.5,
+    S1: 0.6,
+    siteClass: 'D',
+    riskCategory: 'II',
+    Ip: 1.0,
+    buildingHeight: 60,
+    attachmentHeight: 40,
+    seismicDesignCategory: 'D',
+    seismicApproach: 'general',
+    sfrsType: 'Unknown / Not specified',
+    R_building: 0,
+    Omega0_building: 0,
+    Ie_building: 1.0,
+    Ta_approx: null,
+    Ai_override: null,
+  };
+
+  const baseEquip: EquipmentProperties = {
+    manufacturer: 'Test',
+    modelNumber: 'T1',
+    equipmentType: 'RTU',
+    componentType: 'Rooftop unit (RTU) - rigid',
+    weight: 1000,
+    length: 48,
+    width: 30,
+    height: 36,
+    cgHeight: 18,
+    CAR_atGrade: 1.0,
+    CAR_aboveGrade: 1.0,
+    Rpo: 1.5,
+    Omega0p: 2.0,
+  };
+
+  const baseAnchor: AnchorageConfig = {
+    anchorType: 'post-installed-expansion',
+    anchorMaterial: 'F1554-36',
+    anchorDiameter: 0.625,
+    embedmentDepth: 4.0,
+    concreteStrength: 4000,
+    anchorLayout: {
+      pattern: '2x2',
+      nLong: 2,
+      nTrans: 2,
+      spacing: { longitudinal: 36, transverse: 18 },
+      edgeDistance: { ca1: 6, ca2: 6 },
+    },
+  };
+
+  it('general approach forces Rmu = 1.3 (above grade)', () => {
+    const result = runCalculation(baseSite, baseEquip, baseAnchor);
+    expect(result).not.toBeNull();
+    expect(result!.Rmu).toBe(1.3);
+    expect(result!.seismicApproach).toBe('general');
+  });
+
+  it('general approach uses Eq 13.3-5 for Hf (no period)', () => {
+    // Hf = 1 + 2.5 × (z/h) = 1 + 2.5 × (40/60) = 2.667
+    const result = runCalculation(baseSite, baseEquip, baseAnchor);
+    expect(result).not.toBeNull();
+    expect(result!.Hf).toBeCloseTo(1 + 2.5 * (40 / 60), 3);
+  });
+
+  it('known-sfrs approach uses calculated Rmu', () => {
+    const site: SiteParams = {
+      ...baseSite,
+      seismicApproach: 'known-sfrs',
+      sfrsType: 'Special steel moment frame',
+      R_building: 8,
+      Omega0_building: 3,
+      Ie_building: 1.0,
+    };
+    const result = runCalculation(site, baseEquip, baseAnchor);
+    expect(result).not.toBeNull();
+    // Rmu = max(1.3, sqrt(1.1 × 8 / (1.0 × 3))) = max(1.3, sqrt(2.933)) = max(1.3, 1.713) = 1.713
+    expect(result!.Rmu).toBeCloseTo(Math.sqrt(1.1 * 8 / 3), 3);
+    expect(result!.Rmu).toBeGreaterThan(1.3);
+    expect(result!.seismicApproach).toBe('known-sfrs');
+  });
+
+  it('known-sfrs with Ta uses Eq 13.3-4 for Hf', () => {
+    const site: SiteParams = {
+      ...baseSite,
+      seismicApproach: 'known-sfrs',
+      sfrsType: 'Special steel moment frame',
+      R_building: 8,
+      Omega0_building: 3,
+      Ie_building: 1.0,
+      Ta_approx: 1.0,
+    };
+    const result = runCalculation(site, baseEquip, baseAnchor);
+    expect(result).not.toBeNull();
+    // With Ta=1.0: a1 = min(1/1.0, 2.5) = 1.0, a2 = max(0, 1-(0.4/1.0)^2) = 0.84
+    // Hf = 1 + 1.0×(40/60) + 0.84×(40/60)^10
+    const zh = 40 / 60;
+    const expectedHf = 1 + 1.0 * zh + 0.84 * Math.pow(zh, 10);
+    expect(result!.Hf).toBeCloseTo(expectedHf, 3);
+  });
+
+  it('floor-accel approach uses Ai directly', () => {
+    const site: SiteParams = {
+      ...baseSite,
+      seismicApproach: 'floor-accel',
+      Ai_override: 0.5,
+    };
+    const result = runCalculation(site, baseEquip, baseAnchor);
+    expect(result).not.toBeNull();
+    // Fp = 0.5 × (1.0/1.5) × 1.0 × 1000 = 333.33
+    expect(result!.fpCalculated).toBeCloseTo(0.5 * (1.0 / 1.5) * 1.0 * 1000, 1);
+    expect(result!.seismicApproach).toBe('floor-accel');
+    expect(result!.Hf).toBe(0); // Not used
+    expect(result!.Rmu).toBe(0); // Not used
+  });
+
+  it('general approach ignores stored SFRS values', () => {
+    // Even if R_building is set, general approach should force Rmu = 1.3
+    const site: SiteParams = {
+      ...baseSite,
+      seismicApproach: 'general',
+      R_building: 8,
+      Omega0_building: 3,
+      Ie_building: 1.0,
+      Ta_approx: 1.0,
+    };
+    const result = runCalculation(site, baseEquip, baseAnchor);
+    expect(result).not.toBeNull();
+    expect(result!.Rmu).toBe(1.3); // Forced, not calculated
+    // Hf should use Eq 13.3-5 (Ta ignored in general approach)
+    expect(result!.Hf).toBeCloseTo(1 + 2.5 * (40 / 60), 3);
   });
 });

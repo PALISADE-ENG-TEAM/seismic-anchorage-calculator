@@ -23,6 +23,7 @@ interface EquipmentFBDProps {
   Vu: number            // Shear per anchor (lbs)
   governingDirection: 'longitudinal' | 'transverse'
   upliftOccurs: boolean
+  cgOffsetX?: number    // Horizontal CG offset in governing direction (inches)
 }
 
 // ---------------------------------------------------------------------------
@@ -401,6 +402,7 @@ export function EquipmentFBD({
   Vu,
   governingDirection,
   upliftOccurs,
+  cgOffsetX = 0,
 }: EquipmentFBDProps) {
   // Placeholder state
   if (Fp === 0 || (length === 0 && width === 0 && height === 0)) {
@@ -455,8 +457,9 @@ export function EquipmentFBD({
   const eqRight = eqCenterX + eqDrawW / 2
   const eqTop = groundY - eqDrawH
 
-  // CG position
-  const cgX = eqCenterX
+  // CG position (offset horizontally when eccentric)
+  const cgOffsetPx = cgOffsetX * scale
+  const cgX = eqCenterX + cgOffsetPx
   const cgY = groundY - cgDrawH
 
   // Anchor bolt positions (at base, inset slightly from equipment edges)
@@ -544,6 +547,49 @@ export function EquipmentFBD({
       >
         CG
       </text>
+
+      {/* ---- Eccentricity dimension (when CG is offset) ---- */}
+      {Math.abs(cgOffsetX) > 0.1 && (
+        <g>
+          {/* Dashed line from equipment center to CG */}
+          <line
+            x1={eqCenterX} y1={cgY + 10}
+            x2={cgX} y2={cgY + 10}
+            stroke={C.moment}
+            strokeWidth="0.8"
+            strokeDasharray="3 2"
+          />
+          {/* Eccentricity label */}
+          <text
+            x={(eqCenterX + cgX) / 2}
+            y={cgY + 22}
+            textAnchor="middle"
+            fill={C.moment}
+            fontSize="8"
+            fontFamily="sans-serif"
+            fontWeight="600"
+          >
+            e = {commaFmt(Math.abs(cgOffsetX))}"
+          </text>
+          {/* Equipment centerline marker */}
+          <line
+            x1={eqCenterX} y1={cgY - 4}
+            x2={eqCenterX} y2={cgY + 14}
+            stroke={C.hidden}
+            strokeWidth="0.6"
+            strokeDasharray="2 2"
+          />
+          <text
+            x={eqCenterX} y={cgY + 28}
+            textAnchor="middle"
+            fill={C.hidden}
+            fontSize="7"
+            fontFamily="sans-serif"
+          >
+            CL
+          </text>
+        </g>
+      )}
 
       {/* ---- Wp Arrow (gravity, downward at CG) ---- */}
       <ForceArrow

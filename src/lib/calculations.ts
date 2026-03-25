@@ -1165,6 +1165,29 @@ export function generateWarnings(
 
   // --- Seismic Warnings ---
 
+  // I-GENERAL-APPROACH: Using conservative defaults
+  const approach = site.seismicApproach ?? 'general';
+  if (approach === 'general') {
+    warnings.push({
+      severity: 'info',
+      code: 'I-GENERAL-APPROACH',
+      message: 'Using conservative defaults: Hf per Eq. 13.3-5 (no period), Rμ = 1.3. If the building SFRS is known, selecting it may reduce the design force.',
+      codeRef: 'ASCE 7-22 §13.3.1',
+      category: 'seismic',
+    });
+  }
+
+  // W-FLOOR-ACCEL: Floor acceleration override
+  if (approach === 'floor-accel') {
+    warnings.push({
+      severity: 'warning',
+      code: 'W-FLOOR-ACCEL',
+      message: `Floor acceleration Ai = ${site.Ai_override}g provided by user. Verify this value comes from a code-compliant structural analysis per ASCE 7-22 §13.3.1.1.`,
+      codeRef: 'ASCE 7-22 §13.3.1.1',
+      category: 'seismic',
+    });
+  }
+
   // W-SDC-D-ADHESIVE: Adhesive anchor in high seismic
   if (anchor.anchorType === 'post-installed-adhesive' &&
       ['D', 'E', 'F'].includes(site.seismicDesignCategory)) {

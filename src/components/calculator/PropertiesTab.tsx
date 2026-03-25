@@ -111,11 +111,20 @@ export function PropertiesTab({
               onChange={(e) => handleComponentTypeChange(e.target.value)}
               className="mt-1 w-full px-3 py-1.5 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ring"
             >
-              {COMPONENT_TYPES.map((ct) => (
-                <option key={ct.name} value={ct.name}>
-                  {ct.name}
-                </option>
-              ))}
+              <optgroup label="Table 13.6-1 — Mechanical / Electrical">
+                {COMPONENT_TYPES.filter((ct) => ct.tableRef === '13.6-1').map((ct) => (
+                  <option key={ct.name} value={ct.name}>
+                    {ct.name}
+                  </option>
+                ))}
+              </optgroup>
+              <optgroup label="Table 13.5-1 — Architectural">
+                {COMPONENT_TYPES.filter((ct) => ct.tableRef === '13.5-1').map((ct) => (
+                  <option key={ct.name} value={ct.name}>
+                    {ct.name}
+                  </option>
+                ))}
+              </optgroup>
             </select>
           </label>
           <div className="grid grid-cols-4 gap-3">
@@ -138,6 +147,23 @@ export function PropertiesTab({
             <NumField label="Height, H (in)" value={props.height} onChange={(v) => onChange({ height: v })} />
           </div>
           <NumField label="CG Height, hcg (in)" value={props.cgHeight} onChange={(v) => onChange({ cgHeight: v })} />
+          <div className="grid grid-cols-2 gap-3">
+            <NumField
+              label="CG Offset X (in)"
+              value={props.cgOffsetX ?? 0}
+              onChange={(v) => onChange({ cgOffsetX: v })}
+              step={0.5}
+            />
+            <NumField
+              label="CG Offset Y (in)"
+              value={props.cgOffsetY ?? 0}
+              onChange={(v) => onChange({ cgOffsetY: v })}
+              step={0.5}
+            />
+          </div>
+          <p className="text-xs text-muted-foreground italic">
+            Horizontal offset from geometric center. 0 = centered. Used in Rigid Bolt Group analysis.
+          </p>
         </fieldset>
       </div>
 

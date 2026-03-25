@@ -40,16 +40,25 @@ export interface SiteParams {
   attachmentHeight: number; // z, height of equipment attachment (ft)
   seismicDesignCategory: string;
 
-  // ASCE 7-22: Building SFRS info needed for Rμ calculation
+  // ASCE 7-22: Seismic approach and building SFRS info
+  seismicApproach: SeismicApproach;  // Drives which inputs are used for Fp
   sfrsType: string;          // Building SFRS type from Table 12.2-1
   R_building: number;        // Response modification coefficient of building
   Omega0_building: number;   // Overstrength factor of building
   Ie_building: number;       // Importance factor of building (Table 1.5-2)
   Ta_approx: number | null;  // Approximate fundamental period (s), null if unknown
+  Ai_override: number | null; // Floor acceleration from structural analysis (g), §13.3.1.1
 }
 
 export type SiteClass = 'A' | 'B' | 'BC' | 'C' | 'CD' | 'D' | 'DE' | 'E' | 'F';
 export type RiskCategory = 'I' | 'II' | 'III' | 'IV';
+export type SeismicApproach = 'general' | 'known-sfrs' | 'floor-accel';
+
+export interface SDCExemptionResult {
+  status: 'exempt' | 'required';
+  reason: string;
+  codeRef: string;          // e.g., "§13.1.4 Item 2"
+}
 
 export interface EquipmentProperties {
   manufacturer: string;
@@ -62,6 +71,8 @@ export interface EquipmentProperties {
   width: number;               // W (inches)
   height: number;              // H (inches)
   cgHeight: number;            // hcg (inches) - center of gravity height above base
+  cgOffsetX?: number;           // Horizontal CG offset from geometric center along length (inches), default 0
+  cgOffsetY?: number;           // Horizontal CG offset from geometric center along width (inches), default 0
 
   // ASCE 7-22 component parameters (from Tables 13.5-1 / 13.6-1)
   CAR_atGrade: number;         // Component resonance ductility factor, at/below grade
@@ -103,6 +114,19 @@ export interface AnchorProductRef {
 
 export type AnchorType = 'cast-in' | 'post-installed-expansion' | 'post-installed-adhesive';
 export type AnchorMaterial = 'A307' | 'A36' | 'F1554-36' | 'F1554-55' | 'A193-B7';
+export type AnalysisMethod = 'simple' | 'rigid-bolt-group';
+export type PivotMethod = 'centroid' | 'compression-edge';
+
+// ============================================================================
+// Bolt Group Geometry
+// ============================================================================
+
+/** Individual anchor position relative to equipment origin (0,0 = bottom-left corner) */
+export interface AnchorPosition {
+  id: string;        // Unique per bolt (e.g., "a-0-0")
+  x: number;         // X position (inches) — along equipment length
+  y: number;         // Y position (inches) — along equipment width
+}
 
 export interface AnchorLayout {
   pattern: string;        // e.g., '2x2', '2x3', '3x3', 'custom'
@@ -116,6 +140,11 @@ export interface AnchorLayout {
     ca1: number;          // Critical edge distance (inches)
     ca2: number;          // Perpendicular edge distance (inches)
   };
+
+  // Rigid bolt group analysis (optional — backwards compatible)
+  anchors?: AnchorPosition[];             // Explicit positions. If undefined, generate from grid params
+  analysisMethod?: AnalysisMethod;        // Default: 'simple' for backwards compat
+  pivotMethod?: PivotMethod;              // Default: 'centroid' — only used when analysisMethod = 'rigid-bolt-group'
 }
 
 // ============================================================================
@@ -124,6 +153,7 @@ export interface AnchorLayout {
 
 export interface CalculationResults {
   // ASCE 7-22 Seismic Force
+  seismicApproach: SeismicApproach;  // Which approach was used for Fp determination
   Hf: number;               // Height amplification factor (Section 13.3.1.1)
   Rmu: number;              // Structure ductility reduction factor (Section 13.3.1.2)
   CAR: number;              // Component resonance ductility factor used (at/above grade)
@@ -184,12 +214,56 @@ export interface CalculationResults {
     AVcRatio: number;  // AVc/AVco — projected area ratio
   };
 
+  // Rigid Bolt Group Analysis (present when analysisMethod === 'rigid-bolt-group')
+  boltGroup?: BoltGroupResults;
+
   // Engineering Warnings
   warnings: EngineeringWarning[];
 
   overallStatus: 'PASS' | 'FAIL';
   governingCheck: string;
   maxUtilizationRatio: number;
+}
+
+// ============================================================================
+// Rigid Bolt Group Analysis Results
+// ============================================================================
+
+/** Per-anchor force breakdown from rigid bolt group analysis */
+export interface AnchorForceResult {
+  anchorId: string;
+  position: { x: number; y: number };     // Relative to bolt group centroid (inches)
+
+  // Shear components (lbs) — includes Ω0p overstrength
+  vDirectX: number;                        // Direct shear X-component
+  vDirectY: number;                        // Direct shear Y-component
+  vTorsionX: number;                       // Torsional shear X-component
+  vTorsionY: number;                       // Torsional shear Y-component
+  vCombined: number;                       // Vector sum of all shear components
+
+  // Tension components (lbs) — includes Ω0p overstrength
+  tDirect: number;                         // Direct tension (gravity/vertical seismic distribution)
+  tMomentX: number;                        // Tension from overturning about X-axis (seismic in Y)
+  tMomentY: number;                        // Tension from overturning about Y-axis (seismic in X)
+  tCombined: number;                       // Max combined tension (0 if net compression)
+
+  // Combined status
+  interactionRatio: number;                // (Tu/φNn)^(5/3) + (Vu/φVn)^(5/3)
+  isCritical: boolean;                     // True if this is the most-loaded anchor
+}
+
+/** Summary results from rigid bolt group analysis */
+export interface BoltGroupResults {
+  anchorForces: AnchorForceResult[];       // One entry per anchor
+  criticalAnchorId: string;                // ID of most-loaded anchor
+  boltGroupCentroid: { x: number; y: number };  // In equipment coordinates (inches)
+  cgPosition: { x: number; y: number };    // Actual CG position in equipment coordinates
+  eccentricity: { ex: number; ey: number }; // CG offset from bolt group centroid (inches)
+  Ix: number;                              // Second moment of area about X-axis (in²)
+  Iy: number;                              // Second moment of area about Y-axis (in²)
+  Ip: number;                              // Polar moment of inertia (in²)
+  torsionalMomentX: number;               // Torsion from seismic in X-direction (lb-in)
+  torsionalMomentY: number;               // Torsion from seismic in Y-direction (lb-in)
 }
 
 // ============================================================================
@@ -268,4 +342,5 @@ export interface ComponentTypeParams {
   Rpo: number;
   Omega0p: number;
   category: 'mechanical' | 'electrical' | 'architectural';
+  tableRef: '13.5-1' | '13.6-1';  // Which ASCE 7-22 table this comes from
 }

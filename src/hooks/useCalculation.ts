@@ -28,6 +28,8 @@ const defaultSiteParams: SiteParams = {
   Omega0_building: 0,
   Ie_building: 1.0,
   Ta_approx: null,
+  seismicApproach: 'general',
+  Ai_override: null,
 };
 
 const defaultEquipmentProperties: EquipmentProperties = {
