@@ -1,0 +1,896 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ASCE 7-22 Chapter 13 — Seismic Anchorage Calculation Diagnostic</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"
+  onload="renderMathInElement(document.body, {delimiters:[{left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false}]});"></script>
+<style>
+  :root {
+    --navy: #1e3a5f;
+    --blue: #2563eb;
+    --light-bg: #f8fafc;
+    --border: #e2e8f0;
+    --text: #1e293b;
+    --muted: #64748b;
+    --green: #16a34a;
+    --amber: #d97706;
+    --red: #dc2626;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    color: var(--text);
+    line-height: 1.6;
+    font-size: 11pt;
+    max-width: 8.5in;
+    margin: 0 auto;
+    padding: 0.5in;
+  }
+
+  /* Print styles */
+  @media print {
+    body { padding: 0; font-size: 10pt; }
+    .page-break { page-break-before: always; }
+    .no-break { page-break-inside: avoid; }
+    @page { margin: 0.75in 0.6in; size: letter; }
+    h2 { page-break-after: avoid; }
+  }
+
+  /* Cover page */
+  .cover {
+    text-align: center;
+    padding: 2in 0.5in 1in;
+    border-bottom: 4px solid var(--navy);
+    margin-bottom: 1em;
+  }
+  .cover h1 {
+    font-size: 24pt;
+    color: var(--navy);
+    font-weight: 700;
+    margin-bottom: 0.3em;
+    line-height: 1.2;
+  }
+  .cover .subtitle {
+    font-size: 14pt;
+    color: var(--blue);
+    margin-bottom: 1.5em;
+  }
+  .cover .meta {
+    font-size: 10pt;
+    color: var(--muted);
+    line-height: 1.8;
+  }
+  .cover .logo-bar {
+    margin-top: 2em;
+    padding-top: 1em;
+    border-top: 1px solid var(--border);
+    font-size: 12pt;
+    font-weight: 600;
+    color: var(--navy);
+    letter-spacing: 0.1em;
+  }
+
+  /* Section headers */
+  h2 {
+    font-size: 14pt;
+    color: var(--navy);
+    border-bottom: 2px solid var(--navy);
+    padding-bottom: 0.3em;
+    margin: 1.2em 0 0.6em;
+  }
+  h3 {
+    font-size: 12pt;
+    color: var(--blue);
+    margin: 1em 0 0.4em;
+  }
+  h4 {
+    font-size: 11pt;
+    color: var(--text);
+    margin: 0.8em 0 0.3em;
+    font-weight: 600;
+  }
+
+  /* Equation blocks */
+  .eq-block {
+    background: var(--light-bg);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--blue);
+    padding: 0.6em 1em;
+    margin: 0.5em 0;
+    border-radius: 4px;
+  }
+  .eq-block .eq-label {
+    font-size: 9pt;
+    color: var(--muted);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 0.3em;
+  }
+  .eq-block .eq-ref {
+    float: right;
+    font-size: 9pt;
+    color: var(--blue);
+    font-weight: 600;
+  }
+
+  /* Tables */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0.5em 0;
+    font-size: 10pt;
+  }
+  th {
+    background: var(--navy);
+    color: white;
+    padding: 6px 8px;
+    text-align: left;
+    font-weight: 600;
+    font-size: 9pt;
+  }
+  td {
+    padding: 5px 8px;
+    border-bottom: 1px solid var(--border);
+  }
+  tr:nth-child(even) td { background: var(--light-bg); }
+  .table-group-header td {
+    background: #dbeafe !important;
+    font-weight: 600;
+    color: var(--navy);
+    font-size: 9pt;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  /* Flowchart */
+  .flowchart {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+    margin: 1em 0;
+  }
+  .fc-box {
+    border: 2px solid var(--navy);
+    border-radius: 6px;
+    padding: 8px 16px;
+    text-align: center;
+    font-size: 10pt;
+    font-weight: 500;
+    background: white;
+    min-width: 200px;
+    max-width: 400px;
+  }
+  .fc-box.highlight { border-color: var(--blue); background: #eff6ff; }
+  .fc-box.result { border-color: var(--green); background: #f0fdf4; }
+  .fc-box.warn { border-color: var(--amber); background: #fffbeb; }
+  .fc-arrow {
+    font-size: 18pt;
+    color: var(--navy);
+    line-height: 1;
+    margin: 2px 0;
+  }
+  .fc-branch {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+  .fc-branch-col {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+  }
+  .fc-label {
+    font-size: 8pt;
+    color: var(--muted);
+    font-weight: 600;
+    text-transform: uppercase;
+  }
+
+  /* Info boxes */
+  .info-box {
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    border-radius: 6px;
+    padding: 0.5em 0.8em;
+    margin: 0.5em 0;
+    font-size: 10pt;
+  }
+  .warn-box {
+    background: #fef3c7;
+    border: 1px solid #fde68a;
+    border-radius: 6px;
+    padding: 0.5em 0.8em;
+    margin: 0.5em 0;
+    font-size: 10pt;
+  }
+  .critical-box {
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    border-left: 4px solid var(--red);
+    border-radius: 6px;
+    padding: 0.5em 0.8em;
+    margin: 0.5em 0;
+    font-size: 10pt;
+    font-weight: 500;
+  }
+
+  /* Definition list */
+  .def-grid {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 2px 12px;
+    margin: 0.3em 0 0.5em 1em;
+    font-size: 10pt;
+  }
+  .def-grid dt {
+    font-family: 'Cambria Math', 'Times New Roman', serif;
+    font-style: italic;
+    color: var(--navy);
+  }
+
+  /* Badge styles */
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 9pt;
+    font-weight: 600;
+  }
+  .badge-green { background: #dcfce7; color: #166534; }
+  .badge-amber { background: #fef3c7; color: #92400e; }
+  .badge-red { background: #fef2f2; color: #991b1b; }
+
+  /* Compact list */
+  ul, ol { padding-left: 1.5em; margin: 0.3em 0; }
+  li { margin: 0.15em 0; }
+
+  .mono { font-family: 'Consolas', 'Fira Code', monospace; font-size: 10pt; }
+  .small { font-size: 9pt; color: var(--muted); }
+  .text-right { text-align: right; }
+  .text-center { text-align: center; }
+  .font-mono { font-family: 'Consolas', monospace; }
+  strong.navy { color: var(--navy); }
+</style>
+</head>
+<body>
+
+<!-- ================================================================== -->
+<!-- PAGE 1: COVER -->
+<!-- ================================================================== -->
+<div class="cover">
+  <h1>ASCE 7-22 Chapter 13<br>Seismic Anchorage Calculation<br>Diagnostic</h1>
+  <div class="subtitle">Methodology Validation &amp; Code Reference</div>
+  <div class="meta">
+    <strong>Code Standards:</strong> ASCE 7-22 (Seismic Forces) &bull; ACI 318-19 Chapter 17 (Anchor Design)<br>
+    <strong>Revision:</strong> 1.0 &mdash; March 2026<br>
+    <strong>Status:</strong> 127 automated tests passing &bull; Build clean<br>
+    <strong>Tool:</strong> Palisade Engineering Seismic Anchorage Calculator (React/TypeScript SPA)
+  </div>
+  <div class="logo-bar">PALISADE ENGINEERING</div>
+</div>
+
+<!-- ================================================================== -->
+<!-- PAGE 2: CALCULATION PROCEDURE FLOWCHART -->
+<!-- ================================================================== -->
+<div class="page-break"></div>
+
+<h2>1. Calculation Procedure Overview</h2>
+<p>The calculator determines seismic design forces on nonstructural components per ASCE 7-22 Chapter 13, then checks anchor capacity per ACI 318-19 Chapter 17. Three seismic approaches are supported, defaulting to the conservative general case.</p>
+
+<div class="flowchart">
+  <div class="fc-box">
+    <strong>Site Data Input</strong><br>
+    <span class="small">SDS, SD1, Risk Category, Site Class &rarr; SDC</span>
+  </div>
+  <div class="fc-arrow">&darr;</div>
+
+  <div class="fc-box warn">
+    <strong>SDC Exemption Check &mdash; &sect;13.1.4</strong><br>
+    <span class="small">Items 1&ndash;6: SDC, Ip, z/h, weight, category</span>
+  </div>
+  <div class="fc-branch" style="margin: 4px 0;">
+    <div class="fc-branch-col">
+      <div class="fc-label">Exempt</div>
+      <div class="fc-arrow">&darr;</div>
+      <div class="fc-box result" style="min-width:100px;">
+        <span class="small">No seismic<br>analysis required</span>
+      </div>
+    </div>
+    <div class="fc-branch-col">
+      <div class="fc-label">Required</div>
+      <div class="fc-arrow">&darr;</div>
+      <div class="fc-box highlight">
+        <strong>Select Seismic Approach</strong>
+      </div>
+    </div>
+  </div>
+
+  <div class="fc-branch" style="margin: 8px 0;">
+    <div class="fc-branch-col">
+      <div class="fc-box" style="border-color:var(--green);min-width:150px;">
+        <strong>General Case</strong><br>
+        <span class="small">DEFAULT<br>Hf: Eq. 13.3-5<br>R&mu; = 1.3</span>
+      </div>
+    </div>
+    <div class="fc-branch-col">
+      <div class="fc-box" style="min-width:150px;">
+        <strong>Known SFRS</strong><br>
+        <span class="small">Hf: Eq. 13.3-4 or 5<br>R&mu;: Eq. 13.3-6</span>
+      </div>
+    </div>
+    <div class="fc-branch-col">
+      <div class="fc-box" style="min-width:150px;">
+        <strong>Floor Accel.</strong><br>
+        <span class="small">A<sub>i</sub> from analysis<br>&sect;13.3.1.1 alt.</span>
+      </div>
+    </div>
+  </div>
+  <div class="fc-arrow">&darr;</div>
+
+  <div class="fc-box highlight">
+    <strong>F<sub>p</sub> Calculation</strong> &mdash; Eq. 13.3-1 or &sect;13.3.1.1 alt.<br>
+    <span class="small">Bounded: F<sub>p,min</sub> &le; F<sub>p</sub> &le; F<sub>p,max</sub></span>
+  </div>
+  <div class="fc-arrow">&darr;</div>
+
+  <div class="fc-box">
+    <strong>Overturning Analysis</strong><br>
+    <span class="small">M<sub>OT</sub> = F<sub>p</sub> &times; h<sub>cg</sub> &nbsp;|&nbsp; M<sub>R</sub> = 0.9W &times; arm/2</span>
+  </div>
+  <div class="fc-arrow">&darr;</div>
+
+  <div class="fc-box">
+    <strong>Anchor Demands</strong><br>
+    <span class="small">T<sub>u</sub>, V<sub>u</sub> per anchor with &Omega;<sub>0p</sub> overstrength</span>
+  </div>
+  <div class="fc-arrow">&darr;</div>
+
+  <div class="fc-box result">
+    <strong>ACI 318-19 Ch 17 Capacity Checks</strong><br>
+    <span class="small">Steel &bull; Breakout &bull; Pryout &bull; Pullout &bull; Bond &bull; Interaction</span>
+  </div>
+</div>
+
+<!-- ================================================================== -->
+<!-- PAGE 3: SEISMIC FORCE EQUATIONS -->
+<!-- ================================================================== -->
+<div class="page-break"></div>
+
+<h2>2. Seismic Force Equations &mdash; ASCE 7-22 &sect;13.3</h2>
+
+<h3>2.1 Seismic Design Force</h3>
+
+<div class="eq-block no-break">
+  <div class="eq-ref">ASCE 7-22 Eq. 13.3-1</div>
+  <div class="eq-label">Seismic Design Force</div>
+  $$F_p = 0.4 \times S_{DS} \times I_p \times W_p \times \frac{H_f}{R_\mu} \times \frac{C_{AR}}{R_{po}}$$
+</div>
+
+<div class="def-grid">
+  <dt>$S_{DS}$</dt><dd>Design spectral acceleration at short period (g) &mdash; from USGS API or manual entry</dd>
+  <dt>$I_p$</dt><dd>Component importance factor &mdash; Table 13.3-1 (1.0 for RC I/II/III, 1.5 for RC IV)</dd>
+  <dt>$W_p$</dt><dd>Component operating weight (lbs)</dd>
+  <dt>$H_f$</dt><dd>Height amplification factor &mdash; &sect;13.3.1.1</dd>
+  <dt>$R_\mu$</dt><dd>Structure ductility reduction factor &mdash; &sect;13.3.1.2</dd>
+  <dt>$C_{AR}$</dt><dd>Component resonance ductility factor &mdash; Tables 13.5-1 / 13.6-1</dd>
+  <dt>$R_{po}$</dt><dd>Component strength factor &mdash; Tables 13.5-1 / 13.6-1</dd>
+</div>
+
+<div class="eq-block no-break">
+  <div class="eq-ref">Eq. 13.3-2</div>
+  <div class="eq-label">Minimum</div>
+  $$F_{p,\min} = 0.3 \times S_{DS} \times I_p \times W_p$$
+</div>
+
+<div class="eq-block no-break">
+  <div class="eq-ref">Eq. 13.3-3</div>
+  <div class="eq-label">Maximum</div>
+  $$F_{p,\max} = 1.6 \times S_{DS} \times I_p \times W_p$$
+</div>
+
+<p><strong>Governing:</strong> $F_{p,\text{design}} = \min\!\Big(\max(F_p,\; F_{p,\min}),\; F_{p,\max}\Big)$</p>
+
+<h3>2.2 Height Amplification Factor (H<sub>f</sub>)</h3>
+
+<div class="info-box">
+  <strong>Program Input:</strong> SiteTab &rarr; Building Height (<em>h</em>), Attachment Height (<em>z</em>), Period (<em>T<sub>a</sub></em> &mdash; optional, under Known SFRS)
+</div>
+
+<h4>At or below grade (z &le; 0):</h4>
+<p style="margin-left:1em;">$H_f = 1.0$</p>
+
+<div class="eq-block no-break">
+  <div class="eq-ref">Eq. 13.3-4</div>
+  <div class="eq-label">With Known Period</div>
+  $$H_f = 1 + a_1 \left(\frac{z}{h}\right) + a_2 \left(\frac{z}{h}\right)^{10}$$
+  <div class="def-grid" style="margin-top:0.3em;">
+    <dt>$a_1$</dt><dd>$= \min\!\left(\dfrac{1}{T_a},\; 2.5\right)$</dd>
+    <dt>$a_2$</dt><dd>$= \max\!\left(0,\; 1 - \left(\dfrac{0.4}{T_a}\right)^2\right)$</dd>
+  </div>
+  <p class="small">Used when <strong>Known SFRS</strong> approach is selected and T<sub>a</sub> &gt; 0.</p>
+</div>
+
+<div class="eq-block no-break">
+  <div class="eq-ref">Eq. 13.3-5</div>
+  <div class="eq-label">Without Period (Default / Conservative)</div>
+  $$H_f = 1 + 2.5 \left(\frac{z}{h}\right)$$
+  <p class="small">Used in <strong>General Case</strong> approach (always), or in Known SFRS when T<sub>a</sub> is not provided. Note: z/h is capped at 1.0.</p>
+</div>
+
+<div class="warn-box">
+  <strong>ASCE 7-16 vs 7-22:</strong> The old formula used a factor of 2: $H_f = 1 + 2(z/h)$. ASCE 7-22 increased this to <strong>2.5</strong>, making the default 25% more conservative at the roof level.
+</div>
+
+<h3>2.3 Structure Ductility Reduction Factor (R<sub>&mu;</sub>)</h3>
+
+<div class="info-box">
+  <strong>Program Input:</strong> SiteTab &rarr; Seismic Approach radio &rarr; Known SFRS dropdown (R, &Omega;<sub>0</sub>, I<sub>e</sub>)
+</div>
+
+<h4>At or below grade (z &le; 0):</h4>
+<p style="margin-left:1em;">$R_\mu = 1.0$</p>
+
+<div class="eq-block no-break">
+  <div class="eq-ref">Eq. 13.3-6</div>
+  <div class="eq-label">Above Grade &mdash; Known SFRS</div>
+  $$R_\mu = \max\!\left(1.3,\;\; \sqrt{\frac{1.1 \times R}{I_e \times \Omega_0}}\right)$$
+  <div class="def-grid" style="margin-top:0.3em;">
+    <dt>$R$</dt><dd>Response modification coefficient of building SFRS (Table 12.2-1)</dd>
+    <dt>$\Omega_0$</dt><dd>Overstrength factor of building SFRS (Table 12.2-1)</dd>
+    <dt>$I_e$</dt><dd>Building importance factor (Table 1.5-2) &mdash; auto-populated from Risk Category</dd>
+  </div>
+</div>
+
+<p><strong>General Case default:</strong> $R_\mu = 1.3$ (above grade). This is the minimum per Eq. 13.3-6 and is used when the building SFRS is unknown.</p>
+
+<div class="warn-box">
+  <strong>New in ASCE 7-22:</strong> R<sub>&mu;</sub> replaces the implicit ductility in the old R<sub>p</sub> factor. Buildings with special moment frames (R = 8) can achieve R<sub>&mu;</sub> &asymp; 1.71, significantly reducing component forces compared to the 1.3 default.
+</div>
+
+<h3>2.4 Floor Acceleration Alternative</h3>
+
+<div class="eq-block no-break">
+  <div class="eq-ref">&sect;13.3.1.1 Alt.</div>
+  <div class="eq-label">Floor Acceleration Method</div>
+  $$F_p = A_i \times \frac{C_{AR}}{R_{po}} \times I_p \times W_p$$
+  <p class="small">Where $A_i$ is the floor acceleration at the equipment level (g) from structural analysis. Same F<sub>p,min</sub> and F<sub>p,max</sub> bounds apply.</p>
+</div>
+
+<div class="info-box">
+  <strong>Program Input:</strong> SiteTab &rarr; Floor Acceleration radio &rarr; A<sub>i</sub> field (g). This replaces the H<sub>f</sub>/R<sub>&mu;</sub> equation-based approach entirely.
+</div>
+
+<!-- ================================================================== -->
+<!-- PAGE 4: COMPONENT PARAMETERS -->
+<!-- ================================================================== -->
+<div class="page-break"></div>
+
+<h2>3. Component Parameters &mdash; Tables 13.5-1 / 13.6-1</h2>
+
+<div class="info-box">
+  <strong>Program Input:</strong> PropertiesTab &rarr; Component Type dropdown (grouped by table). Values auto-populate C<sub>AR</sub>, R<sub>po</sub>, &Omega;<sub>0p</sub>. User can override.
+</div>
+
+<table class="no-break">
+  <thead>
+    <tr>
+      <th>Component Type</th>
+      <th class="text-center">C<sub>AR</sub><br><span style="font-weight:normal;font-size:8pt">at grade</span></th>
+      <th class="text-center">C<sub>AR</sub><br><span style="font-weight:normal;font-size:8pt">above</span></th>
+      <th class="text-center">R<sub>po</sub></th>
+      <th class="text-center">&Omega;<sub>0p</sub></th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr class="table-group-header"><td colspan="5">Table 13.6-1 &mdash; Mechanical / Electrical</td></tr>
+    <tr><td>Air-side HVAC (fans, AHUs, ductwork)</td><td class="text-center font-mono">1.4</td><td class="text-center font-mono">1.4</td><td class="text-center font-mono">2.0</td><td class="text-center font-mono">2.0</td></tr>
+    <tr><td>Wet-side HVAC (boilers, chillers, cooling towers)</td><td class="text-center font-mono">1.0</td><td class="text-center font-mono">1.0</td><td class="text-center font-mono">1.5</td><td class="text-center font-mono">2.0</td></tr>
+    <tr><td>Generators</td><td class="text-center font-mono">1.0</td><td class="text-center font-mono">1.0</td><td class="text-center font-mono">1.5</td><td class="text-center font-mono">2.0</td></tr>
+    <tr><td>Transformers (dry-type)</td><td class="text-center font-mono">1.0</td><td class="text-center font-mono">1.0</td><td class="text-center font-mono">1.5</td><td class="text-center font-mono">2.0</td></tr>
+    <tr><td>Transformers (liquid-filled)</td><td class="text-center font-mono">1.0</td><td class="text-center font-mono">1.0</td><td class="text-center font-mono">1.5</td><td class="text-center font-mono">2.0</td></tr>
+    <tr><td>Motor control centers, switchgear</td><td class="text-center font-mono">1.4</td><td class="text-center font-mono">1.4</td><td class="text-center font-mono">2.0</td><td class="text-center font-mono">2.0</td></tr>
+    <tr><td>Battery racks</td><td class="text-center font-mono">1.0</td><td class="text-center font-mono">1.0</td><td class="text-center font-mono">1.5</td><td class="text-center font-mono">2.0</td></tr>
+    <tr><td>UPS systems</td><td class="text-center font-mono">1.0</td><td class="text-center font-mono">1.0</td><td class="text-center font-mono">1.5</td><td class="text-center font-mono">2.0</td></tr>
+    <tr><td>Vibration-isolated equipment (spring/neoprene)</td><td class="text-center font-mono">1.8</td><td class="text-center font-mono">2.2</td><td class="text-center font-mono">1.3</td><td class="text-center font-mono">1.75</td></tr>
+    <tr><td>Piping &mdash; high deformability</td><td class="text-center font-mono">1.0</td><td class="text-center font-mono">1.4</td><td class="text-center font-mono">3.5</td><td class="text-center font-mono">1.5</td></tr>
+    <tr><td>Piping &mdash; limited deformability</td><td class="text-center font-mono">1.0</td><td class="text-center font-mono">1.4</td><td class="text-center font-mono">2.5</td><td class="text-center font-mono">1.75</td></tr>
+    <tr><td>Piping &mdash; low deformability</td><td class="text-center font-mono">1.0</td><td class="text-center font-mono">1.4</td><td class="text-center font-mono">1.5</td><td class="text-center font-mono">2.0</td></tr>
+    <tr><td>Pressure vessels</td><td class="text-center font-mono">1.0</td><td class="text-center font-mono">1.0</td><td class="text-center font-mono">1.5</td><td class="text-center font-mono">2.0</td></tr>
+    <tr><td>Fire protection piping</td><td class="text-center font-mono">1.0</td><td class="text-center font-mono">1.4</td><td class="text-center font-mono">3.5</td><td class="text-center font-mono">1.5</td></tr>
+    <tr><td>Rooftop unit (RTU) &mdash; rigid</td><td class="text-center font-mono">1.0</td><td class="text-center font-mono">1.0</td><td class="text-center font-mono">1.5</td><td class="text-center font-mono">2.0</td></tr>
+    <tr><td>Rooftop unit (RTU) &mdash; vibration-isolated</td><td class="text-center font-mono">1.8</td><td class="text-center font-mono">2.2</td><td class="text-center font-mono">1.3</td><td class="text-center font-mono">1.75</td></tr>
+    <tr class="table-group-header"><td colspan="5">Table 13.5-1 &mdash; Architectural</td></tr>
+    <tr><td>Storage cabinets &gt; 6ft</td><td class="text-center font-mono">1.0</td><td class="text-center font-mono">1.0</td><td class="text-center font-mono">1.5</td><td class="text-center font-mono">2.0</td></tr>
+  </tbody>
+</table>
+
+<p class="small">C<sub>AR</sub> selection: at/below grade (z &le; 0) uses &ldquo;at grade&rdquo; column; above grade (z &gt; 0) uses &ldquo;above&rdquo; column &mdash; per &sect;13.3.1.3.</p>
+
+<h3>3.1 Building SFRS Parameters &mdash; Table 12.2-1</h3>
+
+<div class="info-box">
+  <strong>Program Input:</strong> SiteTab &rarr; Known SFRS approach &rarr; Structural System dropdown. Used for R<sub>&mu;</sub> calculation only.
+</div>
+
+<table class="no-break">
+  <thead>
+    <tr>
+      <th>Seismic Force-Resisting System</th>
+      <th class="text-center">R</th>
+      <th class="text-center">&Omega;<sub>0</sub></th>
+      <th class="text-center">C<sub>d</sub></th>
+      <th class="text-center">R<sub>&mu;</sub></th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr><td>Special steel moment frame</td><td class="text-center font-mono">8.0</td><td class="text-center font-mono">3.0</td><td class="text-center font-mono">5.5</td><td class="text-center font-mono">1.71</td></tr>
+    <tr><td>Intermediate steel moment frame</td><td class="text-center font-mono">4.5</td><td class="text-center font-mono">3.0</td><td class="text-center font-mono">4.0</td><td class="text-center font-mono">1.30</td></tr>
+    <tr><td>Ordinary steel moment frame</td><td class="text-center font-mono">3.5</td><td class="text-center font-mono">3.0</td><td class="text-center font-mono">3.0</td><td class="text-center font-mono">1.30</td></tr>
+    <tr><td>Special reinforced concrete moment frame</td><td class="text-center font-mono">8.0</td><td class="text-center font-mono">3.0</td><td class="text-center font-mono">5.5</td><td class="text-center font-mono">1.71</td></tr>
+    <tr><td>Intermediate reinforced concrete moment frame</td><td class="text-center font-mono">5.0</td><td class="text-center font-mono">3.0</td><td class="text-center font-mono">4.5</td><td class="text-center font-mono">1.35</td></tr>
+    <tr><td>Ordinary reinforced concrete moment frame</td><td class="text-center font-mono">3.0</td><td class="text-center font-mono">3.0</td><td class="text-center font-mono">2.5</td><td class="text-center font-mono">1.30</td></tr>
+    <tr><td>Special reinforced concrete shear wall</td><td class="text-center font-mono">5.0</td><td class="text-center font-mono">2.5</td><td class="text-center font-mono">5.0</td><td class="text-center font-mono">1.48</td></tr>
+    <tr><td>Ordinary reinforced concrete shear wall</td><td class="text-center font-mono">4.0</td><td class="text-center font-mono">2.5</td><td class="text-center font-mono">4.0</td><td class="text-center font-mono">1.33</td></tr>
+    <tr><td>Special reinforced masonry shear wall</td><td class="text-center font-mono">5.5</td><td class="text-center font-mono">2.5</td><td class="text-center font-mono">4.0</td><td class="text-center font-mono">1.56</td></tr>
+    <tr><td>Ordinary reinforced masonry shear wall</td><td class="text-center font-mono">2.0</td><td class="text-center font-mono">2.5</td><td class="text-center font-mono">1.75</td><td class="text-center font-mono">1.30</td></tr>
+    <tr><td>Steel concentrically braced frame</td><td class="text-center font-mono">6.0</td><td class="text-center font-mono">2.0</td><td class="text-center font-mono">5.0</td><td class="text-center font-mono">1.81</td></tr>
+    <tr><td>Steel eccentrically braced frame</td><td class="text-center font-mono">8.0</td><td class="text-center font-mono">2.0</td><td class="text-center font-mono">4.0</td><td class="text-center font-mono">2.10</td></tr>
+    <tr><td>Wood frame &mdash; wood structural panels</td><td class="text-center font-mono">6.5</td><td class="text-center font-mono">3.0</td><td class="text-center font-mono">4.0</td><td class="text-center font-mono">1.55</td></tr>
+    <tr><td>Light-frame cold-formed steel &mdash; wood panels</td><td class="text-center font-mono">6.5</td><td class="text-center font-mono">3.0</td><td class="text-center font-mono">4.0</td><td class="text-center font-mono">1.55</td></tr>
+  </tbody>
+</table>
+
+<p class="small">R<sub>&mu;</sub> column shows $\max(1.3,\; \sqrt{1.1R / (I_e \times \Omega_0)})$ with $I_e = 1.0$. For RC IV buildings ($I_e = 1.5$), values will be lower.</p>
+
+<h3>3.2 Importance Factors &mdash; Table 13.3-1</h3>
+<table style="width:auto;">
+  <thead><tr><th>Risk Category</th><th class="text-center">I<sub>p</sub></th><th class="text-center">I<sub>e</sub></th></tr></thead>
+  <tbody>
+    <tr><td>I</td><td class="text-center font-mono">1.0</td><td class="text-center font-mono">1.0</td></tr>
+    <tr><td>II</td><td class="text-center font-mono">1.0</td><td class="text-center font-mono">1.0</td></tr>
+    <tr><td>III</td><td class="text-center font-mono">1.0</td><td class="text-center font-mono">1.0</td></tr>
+    <tr><td>IV</td><td class="text-center font-mono">1.5</td><td class="text-center font-mono">1.5</td></tr>
+  </tbody>
+</table>
+<p class="small">Both I<sub>p</sub> (component) and I<sub>e</sub> (building) auto-populate from Risk Category selection.</p>
+
+<!-- ================================================================== -->
+<!-- PAGE 5: SDC EXEMPTION LOGIC -->
+<!-- ================================================================== -->
+<div class="page-break"></div>
+
+<h2>4. SDC Exemption Logic &mdash; &sect;13.1.4</h2>
+
+<div class="info-box">
+  <strong>Program Display:</strong> SiteTab &rarr; SDC badge (green/amber/red) after USGS lookup. Informational only &mdash; does not block calculation.
+</div>
+
+<p>The calculator checks &sect;13.1.4 Items 1&ndash;6 in order and returns the first matching exemption:</p>
+
+<table class="no-break">
+  <thead>
+    <tr>
+      <th>Item</th>
+      <th>Condition</th>
+      <th>Result</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>1</strong></td>
+      <td>SDC = A</td>
+      <td><span class="badge badge-green">EXEMPT</span> All nonstructural components</td>
+    </tr>
+    <tr>
+      <td><strong>3</strong></td>
+      <td>SDC B/C + M/E/P + I<sub>p</sub> = 1.0 + W<sub>p</sub> &le; 20 lbs</td>
+      <td><span class="badge badge-green">EXEMPT</span> Lightweight component</td>
+    </tr>
+    <tr>
+      <td><strong>2</strong></td>
+      <td>SDC B/C + M/E/P + I<sub>p</sub> = 1.0 + z/h &le; 2/3</td>
+      <td><span class="badge badge-green">EXEMPT</span> Below upper third</td>
+    </tr>
+    <tr>
+      <td><strong>5</strong></td>
+      <td>SDC B + Architectural + I<sub>p</sub> = 1.0</td>
+      <td><span class="badge badge-green">EXEMPT</span> Fastened to structure</td>
+    </tr>
+    <tr>
+      <td><strong>6</strong></td>
+      <td>SDC C + Architectural + I<sub>p</sub> = 1.0 + z &le; 0</td>
+      <td><span class="badge badge-green">EXEMPT</span> At/below grade</td>
+    </tr>
+    <tr>
+      <td>&mdash;</td>
+      <td>None of the above (including all SDC D/E/F)</td>
+      <td><span class="badge badge-red">REQUIRED</span> Full analysis</td>
+    </tr>
+  </tbody>
+</table>
+
+<p class="small"><strong>Note:</strong> Item 3 is checked before Item 2 because a 15-lb component at z/h = 0.9 should still be exempt under the weight criterion. Item 4 (furniture/similar) is not implemented as it requires subjective classification.</p>
+
+<h3>4.1 SDC Exemption &mdash; Decision Summary by Category</h3>
+
+<table>
+  <thead>
+    <tr><th>SDC</th><th>M/E/P, I<sub>p</sub>=1.0</th><th>M/E/P, I<sub>p</sub>=1.5</th><th>Architectural, I<sub>p</sub>=1.0</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><strong>A</strong></td><td class="badge-green text-center">Exempt</td><td class="badge-green text-center">Exempt</td><td class="badge-green text-center">Exempt</td></tr>
+    <tr><td><strong>B</strong></td><td class="text-center">Exempt if z/h&le;2/3 or W&le;20 lbs</td><td class="badge-red text-center">Required</td><td class="badge-green text-center">Exempt</td></tr>
+    <tr><td><strong>C</strong></td><td class="text-center">Exempt if z/h&le;2/3 or W&le;20 lbs</td><td class="badge-red text-center">Required</td><td class="text-center">Exempt only at grade</td></tr>
+    <tr><td><strong>D/E/F</strong></td><td class="badge-red text-center">Required</td><td class="badge-red text-center">Required</td><td class="badge-red text-center">Required</td></tr>
+  </tbody>
+</table>
+
+<!-- ================================================================== -->
+<!-- PAGE 6: OVERTURNING & ANCHOR DEMANDS -->
+<!-- ================================================================== -->
+<div class="page-break"></div>
+
+<h2>5. Overturning Moment Analysis</h2>
+
+<div class="critical-box">
+  <strong>CRITICAL:</strong> Direction 1 (force along LENGTH) uses moment arm = L/2. Direction 2 (force along WIDTH) uses arm = W/2. Do NOT swap these arms.
+</div>
+
+<div class="eq-block no-break">
+  <div class="eq-label">Overturning Moment (both directions)</div>
+  $$M_{OT} = F_p \times h_{cg}$$
+  <p class="small">Where $h_{cg}$ = center of gravity height above base, converted to feet.</p>
+</div>
+
+<div class="eq-block no-break">
+  <div class="eq-label">Resisting Moments &mdash; 0.9W Dead Load Factor</div>
+  $$M_{R1} = 0.9 \times W_p \times \frac{L/2}{12} \quad \text{(Direction 1: force along length)}$$
+  $$M_{R2} = 0.9 \times W_p \times \frac{W/2}{12} \quad \text{(Direction 2: force along width)}$$
+</div>
+
+<div class="eq-block no-break">
+  <div class="eq-label">Net Uplift Moments</div>
+  $$M_{\text{net},1} = \max(0,\; M_{OT} - M_{R1})$$
+  $$M_{\text{net},2} = \max(0,\; M_{OT} - M_{R2})$$
+  <p class="small">Governing direction = whichever produces higher tension per anchor (considering anchor spacing).</p>
+</div>
+
+<h3>5.1 Anchor Demands with &Omega;<sub>0p</sub></h3>
+
+<div class="info-box">
+  <strong>&Omega;<sub>0p</sub> is per-component</strong> from Tables 13.5-1/13.6-1 (not a blanket 2.0). This overstrength factor is applied to anchor demands to ensure ductile failure mode.
+</div>
+
+<div class="eq-block no-break">
+  <div class="eq-label">Tension Demand Per Anchor</div>
+  $$T_u = \frac{M_\text{net} / s_\text{spacing}}{n_\text{tension}} \times \Omega_{0p}$$
+  <div class="def-grid">
+    <dt>$s_\text{spacing}$</dt><dd>Anchor spacing in governing direction (ft)</dd>
+    <dt>$n_\text{tension}$</dt><dd>Number of anchors in tension row</dd>
+    <dt>$\Omega_{0p}$</dt><dd>Component anchorage overstrength factor</dd>
+  </div>
+</div>
+
+<div class="eq-block no-break">
+  <div class="eq-label">Shear Demand Per Anchor</div>
+  $$V_u = \frac{F_p \times \Omega_{0p}}{n_\text{total}}$$
+</div>
+
+<h3>5.2 Vertical Seismic Effect</h3>
+
+<div class="eq-block no-break">
+  <div class="eq-ref">&sect;12.4.2.2</div>
+  <div class="eq-label">Vertical Seismic Force Component</div>
+  $$E_v = \pm\, 0.2 \times S_{DS} \times D$$
+  <p class="small">For uplift check, net stabilizing gravity = $(0.9 - 0.2 \times S_{DS}) \times W_p$. Used in Rigid Bolt Group analysis.</p>
+</div>
+
+<!-- ================================================================== -->
+<!-- PAGE 7: SEISMIC APPROACH COMPARISON -->
+<!-- ================================================================== -->
+<div class="page-break"></div>
+
+<h2>6. Seismic Approach Comparison</h2>
+
+<p>The three approaches produce different levels of conservatism. The table below shows which equations are used by each:</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Parameter</th>
+      <th class="text-center">General Case<br><span style="font-weight:normal;font-size:8pt">(Default)</span></th>
+      <th class="text-center">Known SFRS</th>
+      <th class="text-center">Floor Acceleration</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr><td><strong>H<sub>f</sub></strong></td><td class="text-center">Eq. 13.3-5 always</td><td class="text-center">Eq. 13.3-4 (with T<sub>a</sub>) or 13.3-5</td><td class="text-center">N/A</td></tr>
+    <tr><td><strong>R<sub>&mu;</sub></strong></td><td class="text-center">1.3 (above grade)<br>1.0 (at/below)</td><td class="text-center">Eq. 13.3-6<br>(calculated from R, &Omega;<sub>0</sub>, I<sub>e</sub>)</td><td class="text-center">N/A</td></tr>
+    <tr><td><strong>F<sub>p</sub> equation</strong></td><td class="text-center">Eq. 13.3-1</td><td class="text-center">Eq. 13.3-1</td><td class="text-center">A<sub>i</sub> &times; C<sub>AR</sub>/R<sub>po</sub> &times; I<sub>p</sub> &times; W<sub>p</sub></td></tr>
+    <tr><td><strong>Required inputs</strong></td><td class="text-center">S<sub>DS</sub>, h, z</td><td class="text-center">S<sub>DS</sub>, h, z, SFRS type, T<sub>a</sub> (optional)</td><td class="text-center">S<sub>DS</sub>, A<sub>i</sub></td></tr>
+    <tr><td><strong>Conservatism</strong></td><td class="text-center">Most conservative</td><td class="text-center">Moderate (depends on system)</td><td class="text-center">Depends on analysis</td></tr>
+    <tr><td><strong>Typical use</strong></td><td class="text-center">MEP engineer, unknown building</td><td class="text-center">Structural engineer, own building</td><td class="text-center">Dynamic analysis available</td></tr>
+  </tbody>
+</table>
+
+<h3>6.1 Numerical Example &mdash; Approach Comparison</h3>
+
+<div class="no-break">
+<p><strong>Given:</strong> S<sub>DS</sub> = 1.1g, I<sub>p</sub> = 1.0, W<sub>p</sub> = 1000 lbs, z = 40 ft, h = 60 ft, C<sub>AR</sub> = 1.0, R<sub>po</sub> = 1.5, &Omega;<sub>0p</sub> = 2.0</p>
+
+<table>
+  <thead><tr><th>Step</th><th class="text-center">General Case</th><th class="text-center">Known SFRS<br><span style="font-weight:normal;font-size:8pt">(Special Steel MF, T<sub>a</sub>=1.0s)</span></th></tr></thead>
+  <tbody>
+    <tr><td>z/h</td><td class="text-center font-mono">0.667</td><td class="text-center font-mono">0.667</td></tr>
+    <tr><td>H<sub>f</sub></td><td class="text-center font-mono">2.667 <span class="small">(Eq. 13.3-5)</span></td><td class="text-center font-mono">1.681 <span class="small">(Eq. 13.3-4)</span></td></tr>
+    <tr><td>R<sub>&mu;</sub></td><td class="text-center font-mono">1.300</td><td class="text-center font-mono">1.713 <span class="small">(Eq. 13.3-6)</span></td></tr>
+    <tr><td>H<sub>f</sub>/R<sub>&mu;</sub></td><td class="text-center font-mono">2.051</td><td class="text-center font-mono">0.982</td></tr>
+    <tr><td>C<sub>AR</sub>/R<sub>po</sub></td><td class="text-center font-mono">0.667</td><td class="text-center font-mono">0.667</td></tr>
+    <tr><td>F<sub>p</sub> (Eq. 13.3-1)</td><td class="text-center font-mono"><strong>602 lbs</strong></td><td class="text-center font-mono"><strong>288 lbs</strong></td></tr>
+    <tr><td>F<sub>p,min</sub></td><td class="text-center font-mono">330 lbs</td><td class="text-center font-mono">330 lbs</td></tr>
+    <tr><td>F<sub>p,max</sub></td><td class="text-center font-mono">1,760 lbs</td><td class="text-center font-mono">1,760 lbs</td></tr>
+    <tr><td>F<sub>p,design</sub></td><td class="text-center font-mono"><strong>602 lbs</strong></td><td class="text-center font-mono"><strong>330 lbs</strong> <span class="small">(min governs)</span></td></tr>
+  </tbody>
+</table>
+<p class="small">The Known SFRS approach with a special steel moment frame results in F<sub>p</sub> = 288 lbs (below F<sub>p,min</sub> = 330 lbs, so minimum governs). The General Case yields 602 lbs &mdash; 82% higher. This demonstrates the value of specifying the building SFRS when known.</p>
+</div>
+
+<!-- ================================================================== -->
+<!-- PAGE 8: VALIDATION REFERENCES -->
+<!-- ================================================================== -->
+<div class="page-break"></div>
+
+<h2>7. Industry Validation References</h2>
+
+<h3>7.1 Primary Code References</h3>
+
+<table>
+  <thead><tr><th>Reference</th><th>Used For</th></tr></thead>
+  <tbody>
+    <tr><td><strong>ASCE 7-22</strong> Chapter 13</td><td>Seismic forces on nonstructural components (Eq. 13.3-1 through 13.3-6, Tables 13.5-1, 13.6-1)</td></tr>
+    <tr><td><strong>ASCE 7-22</strong> Table 12.2-1</td><td>SFRS parameters (R, &Omega;<sub>0</sub>, C<sub>d</sub>) for R<sub>&mu;</sub> calculation</td></tr>
+    <tr><td><strong>ASCE 7-22</strong> Table 1.5-2</td><td>Building importance factor I<sub>e</sub> by Risk Category</td></tr>
+    <tr><td><strong>ACI 318-19</strong> Chapter 17</td><td>Anchor design in concrete (steel, breakout, pryout, pullout, bond, interaction)</td></tr>
+  </tbody>
+</table>
+
+<h3>7.2 Supporting Industry Documents</h3>
+
+<table>
+  <thead><tr><th>Document</th><th>Relevance</th></tr></thead>
+  <tbody>
+    <tr><td><strong>FEMA P-2192</strong><br><em>2020 NEHRP Design Examples, Volume I</em></td><td>Worked examples demonstrating ASCE 7-22 Chapter 13 application. Published by NIBS.</td></tr>
+    <tr><td><strong>NIST GCR 18-917-43</strong><br><em>Recommendations for Improved Seismic Performance of Nonstructural Components</em></td><td>Technical basis for ASCE 7-22 Chapter 13 changes. ATC-120 Project. Provides research foundation for H<sub>f</sub>, R<sub>&mu;</sub>, C<sub>AR</sub>/R<sub>po</sub> formulations.</td></tr>
+    <tr><td><strong>2020 NEHRP Training Materials</strong><br><em>Chapter 8: Nonstructural Components (BSSC)</em></td><td>Training slides explaining the new Chapter 13 provisions with definitions and procedures.</td></tr>
+    <tr><td><strong>ICC-ES AC193 / AC308</strong></td><td>Acceptance criteria for post-installed mechanical and adhesive anchors in concrete.</td></tr>
+    <tr><td><strong>ACI 355.2 / ACI 355.4</strong></td><td>Qualification standards for post-installed mechanical and adhesive anchors.</td></tr>
+  </tbody>
+</table>
+
+<h3>7.3 Key Changes from ASCE 7-16</h3>
+
+<table>
+  <thead><tr><th>Parameter</th><th>ASCE 7-16</th><th>ASCE 7-22</th><th>Impact</th></tr></thead>
+  <tbody>
+    <tr><td>Height factor</td><td>$1 + 2(z/h)$</td><td>$1 + 2.5(z/h)$</td><td>25% more conservative at roof</td></tr>
+    <tr><td>Ductility</td><td>Embedded in R<sub>p</sub></td><td>New R<sub>&mu;</sub> factor</td><td>Structure-dependent; can reduce forces significantly</td></tr>
+    <tr><td>Component params</td><td>a<sub>p</sub> / R<sub>p</sub></td><td>C<sub>AR</sub> / R<sub>po</sub></td><td>More refined classification</td></tr>
+    <tr><td>Overstrength</td><td>Blanket &Omega;<sub>0</sub> = 2.0</td><td>Per-component &Omega;<sub>0p</sub></td><td>Component-specific values (1.5 to 2.0)</td></tr>
+    <tr><td>Period refinement</td><td>Not available</td><td>Eq. 13.3-4 with T<sub>a</sub></td><td>Lower forces for long-period structures</td></tr>
+  </tbody>
+</table>
+
+<h3>7.4 Validation Status</h3>
+
+<table>
+  <thead><tr><th>Check</th><th>Status</th><th>Method</th></tr></thead>
+  <tbody>
+    <tr><td>Eq. 13.3-1 (F<sub>p</sub>)</td><td><span class="badge badge-green">Verified</span></td><td>Unit tests + hand calculation cross-check</td></tr>
+    <tr><td>Eq. 13.3-2/3 (bounds)</td><td><span class="badge badge-green">Verified</span></td><td>Automated tests for min/max clamping</td></tr>
+    <tr><td>Eq. 13.3-4 (H<sub>f</sub> with T<sub>a</sub>)</td><td><span class="badge badge-green">Verified</span></td><td>Tests with known T<sub>a</sub> values, z/h cap at 1.0</td></tr>
+    <tr><td>Eq. 13.3-5 (H<sub>f</sub> default)</td><td><span class="badge badge-green">Verified</span></td><td>Tests at grade (1.0), mid-height (2.25), roof (3.5)</td></tr>
+    <tr><td>Eq. 13.3-6 (R<sub>&mu;</sub>)</td><td><span class="badge badge-green">Verified</span></td><td>Tests for 1.3 minimum, below-grade = 1.0, calculated values</td></tr>
+    <tr><td>Floor accel. alternative</td><td><span class="badge badge-green">Verified</span></td><td>Tests for A<sub>i</sub> direct calculation + bounds</td></tr>
+    <tr><td>&sect;13.1.4 exemptions (Items 1&ndash;6)</td><td><span class="badge badge-green">Verified</span></td><td>12 targeted unit tests covering all SDC/category combinations</td></tr>
+    <tr><td>Table 13.5-1 / 13.6-1 values</td><td><span class="badge badge-amber">Manual</span></td><td>Values entered from standard text &mdash; PE should verify against code</td></tr>
+    <tr><td>Table 12.2-1 SFRS values</td><td><span class="badge badge-amber">Manual</span></td><td>Values entered from standard text &mdash; PE should verify against code</td></tr>
+    <tr><td>ACI 318-19 Ch 17 formulas</td><td><span class="badge badge-green">Verified</span></td><td>30 unit tests against hand calculations</td></tr>
+    <tr><td>Overturning moment arms</td><td><span class="badge badge-green">Verified</span></td><td>Direction 1 = L/2, Direction 2 = W/2 (no swap)</td></tr>
+    <tr><td>Overall test suite</td><td><span class="badge badge-green">127 pass</span></td><td>Vitest automated test runner</td></tr>
+  </tbody>
+</table>
+
+<!-- ================================================================== -->
+<!-- PAGE 9: PROGRAM INPUT MAP -->
+<!-- ================================================================== -->
+<div class="page-break"></div>
+
+<h2>8. Program Input Map</h2>
+
+<p>Every calculation input traced to its UI location and data source:</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Input</th>
+      <th>Symbol</th>
+      <th>UI Location</th>
+      <th>Data Source</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr class="table-group-header"><td colspan="4">Site &amp; Seismic Parameters (SiteTab)</td></tr>
+    <tr><td>Design spectral acceleration</td><td class="font-mono">S<sub>DS</sub></td><td>Seismic Parameters &rarr; SDS field</td><td>USGS API or manual</td></tr>
+    <tr><td>1-second spectral acceleration</td><td class="font-mono">S<sub>D1</sub></td><td>Seismic Parameters &rarr; SD1 field</td><td>USGS API or manual</td></tr>
+    <tr><td>Site Class</td><td>&mdash;</td><td>Seismic Parameters &rarr; dropdown</td><td>User selection (A&ndash;F)</td></tr>
+    <tr><td>Risk Category</td><td>&mdash;</td><td>Seismic Parameters &rarr; dropdown</td><td>User selection (I&ndash;IV)</td></tr>
+    <tr><td>Component importance factor</td><td class="font-mono">I<sub>p</sub></td><td>Auto-display</td><td>Table 13.3-1 from RC</td></tr>
+    <tr><td>Building importance factor</td><td class="font-mono">I<sub>e</sub></td><td>Auto-display</td><td>Table 1.5-2 from RC</td></tr>
+    <tr><td>Seismic Design Category</td><td>SDC</td><td>Auto-display + badge</td><td>Calculated from S<sub>DS</sub>, S<sub>D1</sub>, RC</td></tr>
+
+    <tr class="table-group-header"><td colspan="4">Building Geometry (SiteTab)</td></tr>
+    <tr><td>Building height</td><td class="font-mono">h</td><td>Building Info &rarr; h field</td><td>User input (ft)</td></tr>
+    <tr><td>Attachment height</td><td class="font-mono">z</td><td>Building Info &rarr; z field</td><td>User input (ft)</td></tr>
+
+    <tr class="table-group-header"><td colspan="4">Seismic Approach (SiteTab)</td></tr>
+    <tr><td>Approach selection</td><td>&mdash;</td><td>Seismic System &rarr; radio group</td><td>General (default) / Known SFRS / Floor Accel</td></tr>
+    <tr><td>SFRS type</td><td>&mdash;</td><td>Known SFRS &rarr; dropdown</td><td>Table 12.2-1 (14 systems)</td></tr>
+    <tr><td>Building R</td><td class="font-mono">R</td><td>Known SFRS &rarr; auto-display</td><td>From SFRS selection</td></tr>
+    <tr><td>Building &Omega;<sub>0</sub></td><td class="font-mono">&Omega;<sub>0</sub></td><td>Known SFRS &rarr; auto-display</td><td>From SFRS selection</td></tr>
+    <tr><td>Building period</td><td class="font-mono">T<sub>a</sub></td><td>Known SFRS &rarr; period field</td><td>User input (s), optional</td></tr>
+    <tr><td>Floor acceleration</td><td class="font-mono">A<sub>i</sub></td><td>Floor Accel &rarr; Ai field</td><td>User input (g)</td></tr>
+
+    <tr class="table-group-header"><td colspan="4">Component Parameters (PropertiesTab)</td></tr>
+    <tr><td>Component type</td><td>&mdash;</td><td>Component dropdown (optgroup)</td><td>Tables 13.5-1 / 13.6-1</td></tr>
+    <tr><td>Resonance factor (at grade)</td><td class="font-mono">C<sub>AR</sub></td><td>Auto-populated, editable</td><td>From component type</td></tr>
+    <tr><td>Resonance factor (above)</td><td class="font-mono">C<sub>AR</sub></td><td>Auto-populated, editable</td><td>From component type</td></tr>
+    <tr><td>Strength factor</td><td class="font-mono">R<sub>po</sub></td><td>Auto-populated, editable</td><td>From component type</td></tr>
+    <tr><td>Overstrength factor</td><td class="font-mono">&Omega;<sub>0p</sub></td><td>Auto-populated, editable</td><td>From component type</td></tr>
+    <tr><td>Equipment weight</td><td class="font-mono">W<sub>p</sub></td><td>Physical Properties &rarr; Weight</td><td>User input (lbs)</td></tr>
+    <tr><td>CG height</td><td class="font-mono">h<sub>cg</sub></td><td>Physical Properties &rarr; CG Height</td><td>User input (in)</td></tr>
+    <tr><td>Equipment dimensions</td><td class="font-mono">L, W, H</td><td>Physical Properties &rarr; L/W/H fields</td><td>User input (in)</td></tr>
+
+    <tr class="table-group-header"><td colspan="4">Anchorage Configuration (AnchorageTab)</td></tr>
+    <tr><td>Anchor type</td><td>&mdash;</td><td>Anchor Type dropdown</td><td>Cast-in / Expansion / Adhesive</td></tr>
+    <tr><td>Anchor material</td><td>&mdash;</td><td>Material dropdown</td><td>A307 / A36 / F1554 / A193</td></tr>
+    <tr><td>Anchor diameter</td><td class="font-mono">d<sub>a</sub></td><td>Diameter dropdown</td><td>3/8&Prime; to 1-1/4&Prime;</td></tr>
+    <tr><td>Embedment depth</td><td class="font-mono">h<sub>ef</sub></td><td>Embedment field</td><td>User input (in)</td></tr>
+    <tr><td>Concrete strength</td><td class="font-mono">f&prime;<sub>c</sub></td><td>Concrete dropdown</td><td>3000&ndash;6000 psi</td></tr>
+    <tr><td>Anchor layout</td><td>&mdash;</td><td>Pattern + spacing + edge dist.</td><td>User input</td></tr>
+  </tbody>
+</table>
+
+<h3>8.1 Source Code File Map</h3>
+
+<table>
+  <thead><tr><th>File</th><th>Purpose</th></tr></thead>
+  <tbody>
+    <tr><td class="mono">src/lib/calculations.ts</td><td>All ASCE 7-22 + ACI 318-19 formulas. Life-safety critical module.</td></tr>
+    <tr><td class="mono">src/lib/constants.ts</td><td>Tables 13.5-1, 13.6-1, 12.2-1, anchor steel properties, importance factors</td></tr>
+    <tr><td class="mono">src/lib/types.ts</td><td>TypeScript interfaces for all data structures</td></tr>
+    <tr><td class="mono">src/lib/calculations.test.ts</td><td>127 automated verification tests</td></tr>
+    <tr><td class="mono">src/components/calculator/SiteTab.tsx</td><td>Seismic approach radio group, SDC badge, SFRS selection</td></tr>
+    <tr><td class="mono">src/components/calculator/PropertiesTab.tsx</td><td>Component type selection (optgroup), CAR/Rpo/&Omega;<sub>0p</sub> fields</td></tr>
+    <tr><td class="mono">src/components/report/EquationBlock.tsx</td><td>KaTeX equation rendering, approach-aware labels</td></tr>
+  </tbody>
+</table>
+
+<!-- Footer -->
+<div style="margin-top:2em; border-top:2px solid var(--navy); padding-top:0.8em; text-align:center;">
+  <p class="small"><strong>Palisade Engineering</strong> &mdash; Seismic Anchorage Calculator Diagnostic &mdash; Rev 1.0 (March 2026)</p>
+  <p class="small">This document validates the calculation methodology implemented in software. All table values should be independently verified against the ASCE 7-22 and ACI 318-19 standards by a licensed Professional Engineer before use in practice.</p>
+</div>
+
+</body>
+</html>

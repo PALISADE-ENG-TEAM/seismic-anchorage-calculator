@@ -16,6 +16,7 @@ import type { RiskCategory } from './types.ts';
 // ============================================================================
 
 export const COMPONENT_TYPES = [
+  // --- Table 13.6-1: Mechanical / Electrical ---
   {
     name: 'Air-side HVAC (fans, AHUs, ductwork)',
     CAR_atGrade: 1.4,
@@ -23,6 +24,7 @@ export const COMPONENT_TYPES = [
     Rpo: 2,
     Omega0p: 2,
     category: 'mechanical',
+    tableRef: '13.6-1',
   },
   {
     name: 'Wet-side HVAC (boilers, chillers, cooling towers)',
@@ -31,6 +33,7 @@ export const COMPONENT_TYPES = [
     Rpo: 1.5,
     Omega0p: 2,
     category: 'mechanical',
+    tableRef: '13.6-1',
   },
   {
     name: 'Generators',
@@ -39,6 +42,7 @@ export const COMPONENT_TYPES = [
     Rpo: 1.5,
     Omega0p: 2,
     category: 'electrical',
+    tableRef: '13.6-1',
   },
   {
     name: 'Transformers (dry-type)',
@@ -47,6 +51,7 @@ export const COMPONENT_TYPES = [
     Rpo: 1.5,
     Omega0p: 2,
     category: 'electrical',
+    tableRef: '13.6-1',
   },
   {
     name: 'Transformers (liquid-filled)',
@@ -55,6 +60,7 @@ export const COMPONENT_TYPES = [
     Rpo: 1.5,
     Omega0p: 2,
     category: 'electrical',
+    tableRef: '13.6-1',
   },
   {
     name: 'Motor control centers, switchgear',
@@ -63,6 +69,7 @@ export const COMPONENT_TYPES = [
     Rpo: 2,
     Omega0p: 2,
     category: 'electrical',
+    tableRef: '13.6-1',
   },
   {
     name: 'Battery racks',
@@ -71,6 +78,7 @@ export const COMPONENT_TYPES = [
     Rpo: 1.5,
     Omega0p: 2,
     category: 'electrical',
+    tableRef: '13.6-1',
   },
   {
     name: 'UPS systems',
@@ -79,6 +87,7 @@ export const COMPONENT_TYPES = [
     Rpo: 1.5,
     Omega0p: 2,
     category: 'electrical',
+    tableRef: '13.6-1',
   },
   {
     name: 'Vibration-isolated equipment (spring/neoprene)',
@@ -87,14 +96,7 @@ export const COMPONENT_TYPES = [
     Rpo: 1.3,
     Omega0p: 1.75,
     category: 'mechanical',
-  },
-  {
-    name: 'Storage cabinets > 6ft',
-    CAR_atGrade: 1,
-    CAR_aboveGrade: 1,
-    Rpo: 1.5,
-    Omega0p: 2,
-    category: 'architectural',
+    tableRef: '13.6-1',
   },
   {
     name: 'Piping - high deformability',
@@ -103,6 +105,7 @@ export const COMPONENT_TYPES = [
     Rpo: 3.5,
     Omega0p: 1.5,
     category: 'mechanical',
+    tableRef: '13.6-1',
   },
   {
     name: 'Piping - limited deformability',
@@ -111,6 +114,7 @@ export const COMPONENT_TYPES = [
     Rpo: 2.5,
     Omega0p: 1.75,
     category: 'mechanical',
+    tableRef: '13.6-1',
   },
   {
     name: 'Piping - low deformability',
@@ -119,6 +123,7 @@ export const COMPONENT_TYPES = [
     Rpo: 1.5,
     Omega0p: 2,
     category: 'mechanical',
+    tableRef: '13.6-1',
   },
   {
     name: 'Pressure vessels',
@@ -127,6 +132,7 @@ export const COMPONENT_TYPES = [
     Rpo: 1.5,
     Omega0p: 2,
     category: 'mechanical',
+    tableRef: '13.6-1',
   },
   {
     name: 'Fire protection piping',
@@ -135,6 +141,7 @@ export const COMPONENT_TYPES = [
     Rpo: 3.5,
     Omega0p: 1.5,
     category: 'mechanical',
+    tableRef: '13.6-1',
   },
   {
     name: 'Rooftop unit (RTU) - rigid',
@@ -143,6 +150,7 @@ export const COMPONENT_TYPES = [
     Rpo: 1.5,
     Omega0p: 2,
     category: 'mechanical',
+    tableRef: '13.6-1',
   },
   {
     name: 'Rooftop unit (RTU) - vibration-isolated',
@@ -151,6 +159,17 @@ export const COMPONENT_TYPES = [
     Rpo: 1.3,
     Omega0p: 1.75,
     category: 'mechanical',
+    tableRef: '13.6-1',
+  },
+  // --- Table 13.5-1: Architectural ---
+  {
+    name: 'Storage cabinets > 6ft',
+    CAR_atGrade: 1,
+    CAR_aboveGrade: 1,
+    Rpo: 1.5,
+    Omega0p: 2,
+    category: 'architectural',
+    tableRef: '13.5-1',
   },
 ] as const satisfies readonly ComponentTypeParams[];
 
@@ -230,6 +249,11 @@ export const SFRS_TYPES = [
   { name: 'Light-frame cold-formed steel - wood structural panels', R: 6.5, Omega0: 3, Cd: 4 },
   { name: 'Unknown / Not specified', R: 1.3, Omega0: 1, Cd: 1 },
 ] as const satisfies readonly SFRSType[];
+
+/** SFRS types for "Known SFRS" dropdown — excludes "Unknown / Not specified" */
+export const SFRS_TYPES_KNOWN = SFRS_TYPES.filter(
+  (s) => s.name !== 'Unknown / Not specified'
+);
 
 // ============================================================================
 // 4. Importance Factors — ASCE 7-22 Table 13.3-1
